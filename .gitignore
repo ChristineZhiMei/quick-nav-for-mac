@@ -1,0 +1,15 @@
+# SwiftPM
+.build/
+.swiftpm/
+
+# Xcode / macOS build products
+DerivedData/
+*.xcworkspace/
+xcuserdata/
+*.xcuserstate
+*.app
+*.dSYM/
+
+# Editor / OS files
+.DS_Store
+.vscode/
