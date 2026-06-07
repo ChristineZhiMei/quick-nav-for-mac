@@ -11,7 +11,7 @@ struct HotKeyConfig: Codable, Equatable {
     var key: String
     var modifiers: [HotKeyModifier]
 
-    static let `default` = HotKeyConfig(key: "D", modifiers: [.command, .shift])
+    static let `default` = HotKeyConfig(key: "S", modifiers: [.control])
 
     var normalizedKey: String {
         key.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()

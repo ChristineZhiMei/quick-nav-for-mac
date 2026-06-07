@@ -1,7 +1,7 @@
 /**
  @SkillID QuickNavLifecycleCoordinator
  @Description 负责 QuickNav 启动期对象装配，将菜单栏入口、全局快捷键和导航浮层串联起来。
- @Capabilities 初始化状态栏菜单、初始化设置窗口、初始化径向导航窗口、注册 Command+Shift+D 全局快捷键、退出时释放快捷键资源。
+ @Capabilities 初始化状态栏菜单、初始化设置窗口、初始化径向导航窗口、注册用户配置的全局快捷键、退出时释放快捷键资源。
  @LastUpdatedBy Codex
  */
 import AppKit

@@ -30,14 +30,12 @@ struct SettingsView: View {
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(SettingsSection.allCases) { section in
-                Button {
-                    selectedSection = section
-                } label: {
-                    SettingsNavRow(section: section, isActive: section == selectedSection)
-                }
-                .buttonStyle(.plain)
+                SettingsNavRow(section: section, isActive: section == selectedSection)
                 .frame(maxWidth: .infinity)
                 .contentShape(Rectangle())
+                .onTapGesture {
+                    selectedSection = section
+                }
             }
 
             Spacer()
@@ -259,16 +257,20 @@ private struct HotKeyRecorderRow: View {
         }
         .settingsRowBackground(height: 72)
         .overlay(
-            HotKeyCaptureView(
-                isRecording: $isRecording,
-                onCommit: { config in
-                    isRecording = false
-                    apply(config)
-                },
-                onCancel: {
-                    isRecording = false
+            Group {
+                if isRecording {
+                    HotKeyCaptureView(
+                        isRecording: $isRecording,
+                        onCommit: { config in
+                            isRecording = false
+                            apply(config)
+                        },
+                        onCancel: {
+                            isRecording = false
+                        }
+                    )
                 }
-            )
+            }
         )
         .contentShape(Rectangle())
         .onTapGesture {
@@ -326,6 +328,8 @@ private struct HotKeyCaptureView: NSViewRepresentable {
         }
 
         func handleKeyDown(_ event: NSEvent) {
+            guard isRecording.wrappedValue else { return }
+
             if event.keyCode == 53 {
                 onCancel()
                 return
