@@ -6,23 +6,32 @@
  */
 import SwiftUI
 
-// 径向菜单项模型。首版只作为占位，不承载真实 URL/app/command 动作。
+// 径向菜单项模型。每个项都带一个基础动作，执行逻辑交给 ActionExecutor。
 struct RadialMenuItem: Identifiable {
     let id: String
     let title: String
     let systemImage: String
+    let action: RadialMenuAction
+}
+
+enum RadialMenuAction {
+    case settings
+    case openApp(bundleIdentifier: String, fallbackPath: String?)
+    case openFolder(String)
+    case openURL(String)
+    case reloadConfig
 }
 
 struct RadialMenuView: View {
     static let items: [RadialMenuItem] = [
-        .init(id: "menu", title: "Menu", systemImage: "line.3.horizontal"),
-        .init(id: "vscode", title: "VS Code", systemImage: "chevron.left.forwardslash.chevron.right"),
-        .init(id: "terminal", title: "Terminal", systemImage: "terminal"),
-        .init(id: "projects", title: "Projects", systemImage: "folder"),
-        .init(id: "docs", title: "Docs", systemImage: "doc.text"),
-        .init(id: "figma", title: "Figma", systemImage: "square.grid.2x2"),
-        .init(id: "browser", title: "Browser", systemImage: "safari"),
-        .init(id: "reload", title: "Reload", systemImage: "arrow.clockwise")
+        .init(id: "menu", title: "菜单", systemImage: "line.3.horizontal", action: .settings),
+        .init(id: "vscode", title: "VS Code", systemImage: "chevron.left.forwardslash.chevron.right", action: .openApp(bundleIdentifier: "com.microsoft.VSCode", fallbackPath: "/Applications/Visual Studio Code.app")),
+        .init(id: "terminal", title: "Terminal", systemImage: "terminal", action: .openApp(bundleIdentifier: "com.apple.Terminal", fallbackPath: "/System/Applications/Utilities/Terminal.app")),
+        .init(id: "projects", title: "项目", systemImage: "folder", action: .openFolder("~/Documents/code")),
+        .init(id: "docs", title: "文档", systemImage: "doc.text", action: .openFolder("~/Documents")),
+        .init(id: "figma", title: "Figma", systemImage: "square.grid.2x2", action: .openApp(bundleIdentifier: "com.figma.Desktop", fallbackPath: nil)),
+        .init(id: "browser", title: "浏览器", systemImage: "safari", action: .openURL("https://www.google.com")),
+        .init(id: "reload", title: "重载", systemImage: "arrow.clockwise", action: .reloadConfig)
     ]
 
     /**
@@ -30,22 +39,23 @@ struct RadialMenuView: View {
      @description 返回菜单项相对中心的 SwiftUI 坐标。y 轴向下为正，因此这里对 sin 取反。
      @link RadialWindowController.selectedItemID
      */
-    static func visualPosition(for index: Int, total: Int = items.count) -> CGPoint {
+    static func visualPosition(for index: Int, total: Int = items.count, radius: CGFloat = DesignTokens.Menu.radius) -> CGPoint {
         let degrees = Double(index) * 360 / Double(total)
         let radians = degrees * .pi / 180
 
         return CGPoint(
-            x: cos(radians) * DesignTokens.Menu.radius,
-            y: -sin(radians) * DesignTokens.Menu.radius
+            x: cos(radians) * radius,
+            y: -sin(radians) * radius
         )
     }
 
     // 来自 AppKit 控制器的共享状态，决定高亮项和红点位置。
     @ObservedObject var state: RadialMenuState
+    @ObservedObject var appState: AppState
 
     var body: some View {
         ZStack {
-            CancelZoneView()
+            CancelZoneView(radius: appState.deadZoneRadius)
 
             ForEach(Array(Self.items.enumerated()), id: \.element.id) { index, item in
                 radialItem(item, index: index)
@@ -64,7 +74,7 @@ struct RadialMenuView: View {
      @description 渲染单个方向项。只有红点进入图标命中区时才进入 active 状态并轻微放大。
      */
     private func radialItem(_ item: RadialMenuItem, index: Int) -> some View {
-        let position = Self.visualPosition(for: index)
+        let position = Self.visualPosition(for: index, radius: appState.menuRadius)
         let isActive = item.id == state.selectedItemID
 
         return VStack(spacing: 5) {
@@ -85,7 +95,7 @@ struct RadialMenuView: View {
                     .font(.system(size: 21, weight: .medium))
                     .foregroundStyle(DesignTokens.Color.textPrimary)
             }
-            .frame(width: DesignTokens.Menu.itemSize, height: DesignTokens.Menu.itemSize)
+            .frame(width: appState.itemSize, height: appState.itemSize)
 
             Text(item.title)
                 .font(.system(size: 11, weight: isActive ? .medium : .regular))
@@ -100,13 +110,15 @@ struct RadialMenuView: View {
 }
 
 private struct CancelZoneView: View {
+    let radius: CGFloat
+
     // 中心区域仅作视觉死区提示，不再负责打开状态菜单。
     var body: some View {
         ZStack {
             Circle()
                 .fill(Color.white.opacity(0.07))
                 .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 1))
-                .frame(width: DesignTokens.Menu.deadZoneRadius * 2, height: DesignTokens.Menu.deadZoneRadius * 2)
+                .frame(width: radius * 2, height: radius * 2)
 
             Circle()
                 .fill(DesignTokens.Color.textSecondary.opacity(0.65))

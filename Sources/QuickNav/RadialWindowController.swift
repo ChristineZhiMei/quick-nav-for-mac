@@ -22,8 +22,11 @@ final class RadialMenuState: ObservableObject {
 final class RadialWindowController {
     private let logger = Logger(subsystem: "QuickNav", category: "RadialWindow")
 
-    // 第一项 Menu 被选中并松开时，调用状态栏控制器弹出菜单。
-    private let onOpenStatusMenu: @MainActor () -> Void
+    // 设置页会更新这些菜单几何参数，窗口控制器负责在命中算法中使用同一份值。
+    private let appState: AppState
+
+    // 选中项结算后交给 AppDelegate 统一分发到 ActionExecutor。
+    private let onSelectItem: @MainActor (RadialMenuItem) -> Void
 
     // 透明浮层窗口尺寸，需要容纳半径 140 的 8 个图标和标签。
     private let windowSize = NSSize(width: 460, height: 460)
@@ -55,8 +58,9 @@ final class RadialWindowController {
     // 光标所在显示器，用于多屏场景下隐藏/恢复正确 display 的系统光标。
     private var cursorDisplayID = CGMainDisplayID()
 
-    init(onOpenStatusMenu: @escaping @MainActor () -> Void) {
-        self.onOpenStatusMenu = onOpenStatusMenu
+    init(appState: AppState, onSelectItem: @escaping @MainActor (RadialMenuItem) -> Void) {
+        self.appState = appState
+        self.onSelectItem = onSelectItem
     }
 
     /**
@@ -163,7 +167,7 @@ final class RadialWindowController {
             self?.cancelNavigation()
         }
 
-        let view = RadialMenuView(state: menuState)
+        let view = RadialMenuView(state: menuState, appState: appState)
 
         panel.contentView = NSHostingView(rootView: view)
         return panel
@@ -286,8 +290,8 @@ final class RadialWindowController {
         let dy = point.y - dragStartPoint.y
         let distance = hypot(dx, dy)
 
-        if distance > DesignTokens.Menu.radius {
-            let scale = DesignTokens.Menu.radius / distance
+        if distance > appState.menuRadius {
+            let scale = appState.menuRadius / distance
             menuState.cursorOffset = CGSize(
                 width: dx * scale,
                 height: -(dy * scale)
@@ -296,7 +300,7 @@ final class RadialWindowController {
             menuState.cursorOffset = CGSize(width: dx, height: -dy)
         }
 
-        guard distance >= DesignTokens.Menu.deadZoneRadius else {
+        guard distance >= appState.deadZoneRadius else {
             menuState.selectedItemID = nil
             return
         }
@@ -309,11 +313,11 @@ final class RadialWindowController {
      @description 用红点和图标中心距离做真实命中，只有进入图标区域才选中，避免按角度提前高亮。
      */
     private func selectedItemID(cursorOffset: CGSize) -> String? {
-        let hitRadius = DesignTokens.Menu.itemSize / 2 + 8
+        let hitRadius = appState.itemSize / 2 + 8
         let cursorPoint = CGPoint(x: cursorOffset.width, y: cursorOffset.height)
 
         return RadialMenuView.items.enumerated().first { index, _ in
-            let itemPoint = RadialMenuView.visualPosition(for: index)
+            let itemPoint = RadialMenuView.visualPosition(for: index, radius: appState.menuRadius)
             return hypot(cursorPoint.x - itemPoint.x, cursorPoint.y - itemPoint.y) <= hitRadius
         }?.element.id
     }
@@ -333,18 +337,15 @@ final class RadialWindowController {
 
     /**
      @name settleSelectionIfNeeded
-     @description 命中 Menu 时打开状态菜单，命中其他项时只打印占位日志，暂不执行真实应用。
+     @description 命中任意菜单项时统一回调上层执行动作。
      */
     private func settleSelectionIfNeeded() {
         guard let selectedItem = RadialMenuView.items.first(where: { $0.id == menuState.selectedItemID }) else {
             return
         }
 
-        if selectedItem.id == "menu" {
-            onOpenStatusMenu()
-        } else {
-            logger.info("Selected placeholder item: \(selectedItem.title, privacy: .public)")
-        }
+        logger.info("Selected item: \(selectedItem.title, privacy: .public)")
+        onSelectItem(selectedItem)
     }
 
     /**

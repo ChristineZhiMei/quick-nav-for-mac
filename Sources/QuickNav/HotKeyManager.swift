@@ -1,6 +1,6 @@
 /**
  @SkillID QuickNavGlobalHotKey
- @Description 使用 Carbon 注册 Command+Shift+D，并把按下/松开事件转发回主线程驱动导航生命周期。
+ @Description 使用 Carbon 注册用户配置的全局快捷键，并把按下/松开事件转发回主线程驱动导航生命周期。
  @Capabilities 注册 kEventHotKeyPressed/kEventHotKeyReleased、桥接 Carbon 回调与 Swift 闭包、注销系统快捷键资源。
  @LastUpdatedBy Codex
  */
@@ -36,6 +36,9 @@ final class HotKeyManager: @unchecked Sendable {
     // Carbon 事件处理器引用，用于应用退出时移除。
     private var eventHandlerRef: EventHandlerRef?
 
+    // 当前已注册快捷键，用于状态展示和调试。
+    private(set) var currentConfig: HotKeyConfig?
+
     init(
         onPress: @escaping @MainActor @Sendable () -> Void,
         onRelease: @escaping @MainActor @Sendable () -> Void
@@ -46,10 +49,13 @@ final class HotKeyManager: @unchecked Sendable {
 
     /**
      @name register
-     @description 注册 Command+Shift+D，并同时监听 pressed/released 两种事件，支撑“按住显示、松开关闭”的交互。
+     @description 注册指定快捷键，并同时监听 pressed/released 两种事件，支撑“按住显示、松开关闭”的交互。
      @link AppDelegate.applicationDidFinishLaunching
      */
-    func register() throws {
+    func register(_ config: HotKeyConfig) throws {
+        let validatedConfig = try config.validated()
+        unregister()
+
         var eventTypes = [
             EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed)),
             EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyReleased))
@@ -101,10 +107,9 @@ final class HotKeyManager: @unchecked Sendable {
             throw HotKeyError.eventHandlerFailed(handlerStatus)
         }
 
-        let modifiers = UInt32(cmdKey | shiftKey)
         let registerStatus = RegisterEventHotKey(
-            UInt32(kVK_ANSI_D),
-            modifiers,
+            validatedConfig.carbonKeyCode ?? UInt32(kVK_ANSI_D),
+            validatedConfig.carbonModifiers,
             HotKeyManager.hotKeyID,
             GetApplicationEventTarget(),
             0,
@@ -115,6 +120,8 @@ final class HotKeyManager: @unchecked Sendable {
             unregister()
             throw HotKeyError.registrationFailed(registerStatus)
         }
+
+        currentConfig = validatedConfig
     }
 
     /**
@@ -131,6 +138,8 @@ final class HotKeyManager: @unchecked Sendable {
             RemoveEventHandler(eventHandlerRef)
             self.eventHandlerRef = nil
         }
+
+        currentConfig = nil
     }
 
     private static let hotKeyID = EventHotKeyID(signature: fourCharCode("QNav"), id: 1)

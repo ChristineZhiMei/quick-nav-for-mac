@@ -1,42 +1,42 @@
 # QuickNav for Mac
 
-QuickNav is a macOS resident shortcut launcher. Hold a global hotkey, move the pointer toward a radial menu item, then release to open a URL, launch an app, or run a local command.
+QuickNav 是一个 macOS 常驻快捷导航工具。按住全局快捷键，移动到径向菜单项，松开后即可打开网址、启动应用或执行本地动作。
 
-The product direction is a lightweight personal macOS utility: low interruption, fast pointer-driven selection, local JSON configuration, and a Raycast-inspired dark interface.
+产品方向是轻量的个人 macOS 工具：低打扰、指针驱动的快速选择、本地 JSON 配置，以及 Raycast 风格的深色界面。
 
 ![QuickNav Raycast design](docs/assets/design/quicknav-raycast-design.png)
 
-## Current Status
+## 当前状态
 
-- Product requirements are drafted.
-- Development architecture is drafted.
-- Raycast-inspired visual direction is drafted.
-- Pencil design exploration is exported to `docs/assets/design/quicknav-raycast-design.png`.
-- Minimal SwiftPM app scaffold is implemented: menu bar app, `Command + Shift + D` hotkey, and a basic radial navigation surface.
+- 产品需求已整理。
+- 开发架构已整理。
+- Raycast 风格视觉方向已整理。
+- Pencil 设计探索已导出到 `docs/assets/design/quicknav-raycast-design.png`。
+- 最小 SwiftPM 应用骨架已实现：菜单栏常驻、可自定义全局快捷键、隐藏光标径向导航、Pencil 风格设置窗口、配置文件入口，以及基础应用/网址/目录动作。
 
-## Run Locally
+## 本地运行
 
-Build the app:
+构建应用：
 
 ```bash
 swift build
 ```
 
-Run the menu bar prototype:
+运行菜单栏原型：
 
 ```bash
 swift run QuickNav
 ```
 
-Once running, the `Q` item appears in the macOS menu bar. Click `Q` to open the status menu. Hold `Command + Shift + D` to show the navigation surface, then press and drag with one finger on the trackpad or mouse to move the red cursor dot. Releasing the trackpad or mouse only closes the surface when an item is selected; otherwise it resets the dot and cursor back to the center. Releasing the hotkey always closes the surface and restores the system cursor to the starting point.
+启动后，macOS 右上角菜单栏会出现 `Q`。点击 `Q` 可以打开状态菜单，包括启用/停用、重载配置、打开配置文件/目录、设置、辅助功能设置、关于和退出。默认按住 `Command + Shift + D` 可以显示径向导航；也可以在「设置 > 通用」里勾选修饰键、输入 A-Z 或 0-9 主键，然后点击「应用快捷键」修改。松开触摸板或鼠标时，只有选中某个菜单项才会关闭并执行；未选中时会回到中心。松开快捷键会关闭导航，并把系统光标恢复到打开时的位置。
 
-## Documents
+## 文档
 
-- [Product Requirements](docs/prd.md)
-- [Development Plan](docs/development.md)
-- [Design Direction](docs/design.md)
+- [产品需求](docs/prd.md)
+- [开发计划](docs/development.md)
+- [设计方向](docs/design.md)
 
-## Project Structure
+## 项目结构
 
 ```text
 quick-nav-for-mac/
@@ -54,50 +54,50 @@ quick-nav-for-mac/
 │           └── *.png
 ```
 
-## Product Summary
+## 产品摘要
 
-QuickNav appears around the current pointer position while the global hotkey is held. The pointer is hidden and a red cursor dot moves only while the trackpad or mouse is pressed. The red dot is visually clamped to the navigation radius without warping the real pointer during drag. Items are selected only when the dot reaches the item icon area. The first item opens the status menu.
+按住全局快捷键时，QuickNav 会出现在当前指针附近。系统光标会隐藏，红色圆点只在触摸板或鼠标按下拖动时移动。红点会在视觉上限制在菜单半径内，但拖动过程中不会强行移动真实光标，避免边界卡死。只有红点进入图标区域时才会选中菜单项。第一项会打开基于 Pencil `Visible settings panel` 设计的自定义设置窗口，其余内置项会打开基础应用、目录、网址或重载配置。
 
-Default interaction decisions:
+默认交互参数：
 
-- Hotkey: `Command + Shift + D`
-- Menu radius: `140px`
-- Dead zone radius: `36px`
-- Default menu item count: `8`
-- Angle origin: right side of the screen
-- Direction order: clockwise
+- 默认快捷键：`Command + Shift + D`，可在设置页自定义
+- 菜单半径：`140px`
+- 中心死区半径：`36px`
+- 默认菜单项数量：`8`
+- 角度起点：屏幕右侧
+- 排列方向：顺时针
 
-## Design Direction
+## 设计方向
 
-The interface follows a Raycast-inspired style without copying Raycast's command palette shape directly. The radial menu remains the primary QuickNav interaction model.
+界面采用 Raycast inspired 风格，但不直接复制 Raycast 的命令面板形态。径向菜单仍然是 QuickNav 的核心交互模型。
 
-Key visual decisions:
+关键视觉决策：
 
-- Dark translucent surfaces.
-- Compact tool UI.
-- High-contrast typography.
-- Red accent for active selection.
-- Strong selection feedback through color, scale, shadow, and text contrast.
-- macOS-native implementation using SwiftUI, AppKit, SF Symbols, and system materials where practical.
+- 深色半透明表面。
+- 紧凑工具型界面。
+- 高对比文字层级。
+- 选中态使用红色强调。
+- 通过颜色、缩放、阴影和文字对比提供明确反馈。
+- 尽量使用 SwiftUI、AppKit、SF Symbols 和系统材质实现 macOS 原生体验。
 
-## Planned Technical Stack
+## 技术栈
 
 - Swift
 - SwiftUI
 - AppKit
-- Carbon HotKey or equivalent global hotkey handling
-- `NSEvent` / `CGEvent` mouse tracking
-- `NSWorkspace` and `Process` for action execution
-- `Codable` JSON configuration
-- XCTest for angle calculation, config parsing, and action validation
+- Carbon HotKey 或等效全局快捷键处理
+- `NSEvent` / `CGEvent` 鼠标跟踪
+- `NSWorkspace` 和 `Process` 动作执行
+- `Codable` JSON 配置
+- XCTest 覆盖角度计算、配置解析和动作校验
 
-## Implementation Notes
+## 实现说明
 
-The current prototype intentionally does not execute real actions or load JSON configuration. The first implementation milestone is only the app shell: status bar presence, press-and-hold global hotkey behavior, hidden-cursor directional selection, and a Raycast-inspired radial menu shape.
+当前原型会执行一组小型内置动作，并在 `~/Library/Application Support/QuickNav/config.json` 创建默认本地配置文件。基于 JSON 的自定义菜单编辑仍是后续步骤；当前设置面板已支持启用/停用 QuickNav、自定义全局快捷键、调整菜单几何参数、查看内置动作、打开权限设置，以及打开/重载配置文件。
 
-## Asset Notes
+## 资源说明
 
-`docs/assets/prototypes/` contains early visual references and generated prototype images. The current design reference to use for implementation is:
+`docs/assets/prototypes/` 存放早期视觉参考和生成的原型图。当前实现应参考的设计图是：
 
 ```text
 docs/assets/design/quicknav-raycast-design.png
