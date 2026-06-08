@@ -1,7 +1,7 @@
 /**
  @SkillID QuickNavDesignTokens
  @Description QuickNav 原型阶段的视觉常量集合，保持径向菜单和替代光标的尺寸、颜色、动效一致。
- @Capabilities 提供 Raycast 风格深色配色、菜单半径、死区半径、图标尺寸、出现/选择/关闭动效时间。
+ @Capabilities 提供 Raycast 风格深色配色、菜单半径、中心缓冲区半径、图标尺寸、出现/选择/关闭动效时间。
  @LastUpdatedBy Codex
  */
 import SwiftUI
@@ -25,9 +25,12 @@ enum DesignTokens {
 
     // radius 同时用于应用图标布局、红点视觉夹紧范围和命中计算的基准距离。
     enum Menu {
-        static let radius: CGFloat = 140
-        static let deadZoneRadius: CGFloat = 36
-        static let itemSize: CGFloat = 52
+        static let radius: CGFloat = 125
+        static let deadZoneRadius: CGFloat = 37
+        static let itemSize: CGFloat = 60
+        static let isBackgroundVisible = false
+        static let backgroundRadius: CGFloat = 175
+        static let backgroundOpacity: CGFloat = 0.24
     }
 
     // 动效保持短促，避免影响方向选择手感。

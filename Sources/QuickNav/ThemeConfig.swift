@@ -1,0 +1,300 @@
+/**
+ @SkillID QuickNavThemeConfig
+ @Description 定义 QuickNav 主题配置、预设色和语义色板，供设置页与径向导航共享。
+ @Capabilities 支持跟随系统/明色/暗色模式、明暗预设主题、自定义 accent、语义 token 派生。
+ @LastUpdatedBy Codex
+ */
+import Foundation
+import AppKit
+import SwiftUI
+
+enum ThemeMode: String, Codable, CaseIterable, Identifiable {
+    case system
+    case light
+    case dark
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .system: "跟随系统"
+        case .light: "明色"
+        case .dark: "暗色"
+        }
+    }
+
+    var preferredColorScheme: ColorScheme? {
+        switch self {
+        case .system:
+            return nil
+        case .light:
+            return .light
+        case .dark:
+            return .dark
+        }
+    }
+
+    var nsAppearance: NSAppearance? {
+        switch self {
+        case .system:
+            return nil
+        case .light:
+            return NSAppearance(named: .aqua)
+        case .dark:
+            return NSAppearance(named: .darkAqua)
+        }
+    }
+}
+
+enum ThemePresetID: String, Codable, CaseIterable, Identifiable {
+    case crimson
+    case rose
+    case blue
+    case violet
+    case emerald
+    case amber
+    case custom
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .crimson: "陶粉"
+        case .rose: "Raycast 红"
+        case .blue: "雾蓝"
+        case .violet: "灰紫"
+        case .emerald: "鼠尾草"
+        case .amber: "暖沙"
+        case .custom: "自定义"
+        }
+    }
+}
+
+struct ThemeConfig: Codable, Equatable {
+    var mode: ThemeMode
+    var lightPreset: ThemePresetID
+    var darkPreset: ThemePresetID
+    var customLightAccent: String
+    var customDarkAccent: String
+
+    static let `default` = ThemeConfig(
+        mode: .system,
+        lightPreset: .crimson,
+        darkPreset: .crimson,
+        customLightAccent: "#B76E79",
+        customDarkAccent: "#C9828B"
+    )
+
+    var migratingLegacyDefaultAccents: ThemeConfig {
+        var next = self
+
+        // 旧版本默认自定义色是高饱和红色。这里仅迁移这些旧默认值，不覆盖用户改过的其它自定义色。
+        if next.customLightAccent.normalizedHexString == "#E5484D" {
+            next.customLightAccent = Self.default.customLightAccent
+        }
+        if next.customDarkAccent.normalizedHexString == "#FF453A" {
+            next.customDarkAccent = Self.default.customDarkAccent
+        }
+
+        return next
+    }
+}
+
+struct ThemePalette {
+    let surface: Color
+    let sidebar: Color
+    let panel: Color
+    let row: Color
+    let border: Color
+    let textPrimary: Color
+    let textSecondary: Color
+    let textMuted: Color
+    let accent: Color
+    let accentText: Color
+    let accentShadow: Color
+    let success: Color
+    let warning: Color
+}
+
+enum ThemeAppearance {
+    case light
+    case dark
+}
+
+@MainActor
+enum ThemePaletteFactory {
+    static func palette(for config: ThemeConfig, colorScheme: ColorScheme) -> ThemePalette {
+        let appearance = resolvedAppearance(for: config.mode, colorScheme: colorScheme)
+        let accentHex = accentHex(for: config, appearance: appearance)
+        let accent = Color(hex: accentHex)
+        let base = basePalette(for: appearance)
+
+        return ThemePalette(
+            surface: base.surface,
+            sidebar: base.sidebar,
+            panel: base.panel,
+            row: base.row,
+            border: base.border,
+            textPrimary: base.textPrimary,
+            textSecondary: base.textSecondary,
+            textMuted: base.textMuted,
+            accent: accent,
+            accentText: contrastText(for: accentHex),
+            accentShadow: accent.opacity(0.35),
+            success: appearance == .dark ? Color(hex: "#30D158") : Color(hex: "#10B981"),
+            warning: appearance == .dark ? Color(hex: "#FFD60A") : Color(hex: "#D97706")
+        )
+    }
+
+    static func accentPreview(for preset: ThemePresetID, appearance: ThemeAppearance, customHex: String) -> Color {
+        if preset == .custom {
+            return Color(hex: normalizedHex(customHex, fallback: accentHex(for: .crimson, appearance: appearance)))
+        }
+        return Color(hex: accentHex(for: preset, appearance: appearance))
+    }
+
+    private static func resolvedAppearance(for mode: ThemeMode, colorScheme: ColorScheme) -> ThemeAppearance {
+        switch mode {
+        case .light:
+            return .light
+        case .dark:
+            return .dark
+        case .system:
+            return systemAppearance()
+        }
+    }
+
+    private static func basePalette(for appearance: ThemeAppearance) -> ThemePalette {
+        switch appearance {
+        case .light:
+            return ThemePalette(
+                surface: Color(hex: "#F4F1EC"),
+                sidebar: Color(hex: "#ECE8E1"),
+                panel: Color(hex: "#FAF8F4"),
+                row: Color(hex: "#FAF8F4"),
+                border: Color(hex: "#D8D0C5"),
+                textPrimary: Color(hex: "#2B2926"),
+                textSecondary: Color(hex: "#6F6962"),
+                textMuted: Color(hex: "#9A9288"),
+                accent: Color(hex: "#B76E79"),
+                accentText: .white,
+                accentShadow: Color(hex: "#B76E79").opacity(0.35),
+                success: Color(hex: "#8FA58E"),
+                warning: Color(hex: "#C2A878")
+            )
+        case .dark:
+            return ThemePalette(
+                surface: Color(hex: "#171615"),
+                sidebar: Color(hex: "#12110F"),
+                panel: Color(hex: "#24221F"),
+                row: Color(hex: "#24221F"),
+                border: Color.white.opacity(0.08),
+                textPrimary: Color(hex: "#F3EFE8"),
+                textSecondary: Color(hex: "#B6AEA3"),
+                textMuted: Color(hex: "#81786F"),
+                accent: Color(hex: "#C9828B"),
+                accentText: .white,
+                accentShadow: Color(hex: "#C9828B").opacity(0.35),
+                success: Color(hex: "#9AB09A"),
+                warning: Color(hex: "#D0B982")
+            )
+        }
+    }
+
+    private static func accentHex(for config: ThemeConfig, appearance: ThemeAppearance) -> String {
+        switch appearance {
+        case .light:
+            if config.lightPreset == .custom {
+                return normalizedHex(config.customLightAccent, fallback: accentHex(for: .crimson, appearance: .light))
+            }
+            return accentHex(for: config.lightPreset, appearance: .light)
+        case .dark:
+            if config.darkPreset == .custom {
+                return normalizedHex(config.customDarkAccent, fallback: accentHex(for: .crimson, appearance: .dark))
+            }
+            return accentHex(for: config.darkPreset, appearance: .dark)
+        }
+    }
+
+    private static func contrastText(for hex: String) -> Color {
+        guard let components = rgbComponents(from: hex) else {
+            return .white
+        }
+
+        func linearized(_ value: Double) -> Double {
+            value <= 0.03928 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+        }
+
+        let red = linearized(components.red)
+        let green = linearized(components.green)
+        let blue = linearized(components.blue)
+        let luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+
+        return luminance > 0.42 ? .black : .white
+    }
+
+    private static func accentHex(for preset: ThemePresetID, appearance: ThemeAppearance) -> String {
+        switch (preset, appearance) {
+        case (.crimson, .light): "#B76E79"
+        case (.rose, .light): "#FF6363"
+        case (.blue, .light): "#7F95A3"
+        case (.violet, .light): "#9A8FAE"
+        case (.emerald, .light): "#8FA58E"
+        case (.amber, .light): "#C2A878"
+        case (.crimson, .dark): "#C9828B"
+        case (.rose, .dark): "#FF6363"
+        case (.blue, .dark): "#8EA6B4"
+        case (.violet, .dark): "#A79AB8"
+        case (.emerald, .dark): "#9AB09A"
+        case (.amber, .dark): "#D0B982"
+        case (.custom, _): "#C9828B"
+        }
+    }
+
+    private static func systemAppearance() -> ThemeAppearance {
+        let match = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua])
+        return match == .darkAqua ? .dark : .light
+    }
+
+    private static func normalizedHex(_ hex: String, fallback: String) -> String {
+        let sanitized = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#")).uppercased()
+        guard sanitized.count == 6, UInt64(sanitized, radix: 16) != nil else {
+            return fallback
+        }
+        return "#\(sanitized)"
+    }
+
+    private static func rgbComponents(from hex: String) -> (red: Double, green: Double, blue: Double)? {
+        let sanitized = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#")).uppercased()
+        guard sanitized.count == 6, let value = UInt64(sanitized, radix: 16) else {
+            return nil
+        }
+
+        return (
+            red: Double((value & 0xFF0000) >> 16) / 255.0,
+            green: Double((value & 0x00FF00) >> 8) / 255.0,
+            blue: Double(value & 0x0000FF) / 255.0
+        )
+    }
+}
+
+extension Color {
+    init(hex: String) {
+        let sanitized = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#")).uppercased()
+        var value: UInt64 = 0
+        Scanner(string: sanitized).scanHexInt64(&value)
+
+        let red = Double((value & 0xFF0000) >> 16) / 255.0
+        let green = Double((value & 0x00FF00) >> 8) / 255.0
+        let blue = Double(value & 0x0000FF) / 255.0
+
+        self.init(red: red, green: green, blue: blue)
+    }
+}
+
+private extension String {
+    var normalizedHexString: String {
+        let sanitized = trimmingCharacters(in: CharacterSet(charactersIn: "#")).uppercased()
+        return "#\(sanitized)"
+    }
+}

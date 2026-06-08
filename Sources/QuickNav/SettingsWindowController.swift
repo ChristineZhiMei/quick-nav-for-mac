@@ -9,17 +9,29 @@ import SwiftUI
 
 @MainActor
 final class SettingsWindowController {
+    private enum Layout {
+        static let minWindowWidth: CGFloat = 600
+        static let minWindowHeight: CGFloat = 590
+    }
+
     private let appState: AppState
     private let configManager: ConfigManager
     private let applyHotKey: (HotKeyConfig) -> Void
+    private let applyTheme: (ThemeConfig) -> Void
 
     // 设置窗口保持复用，避免每次打开都创建新的窗口实例。
     private var window: NSWindow?
 
-    init(appState: AppState, configManager: ConfigManager, applyHotKey: @escaping (HotKeyConfig) -> Void) {
+    init(
+        appState: AppState,
+        configManager: ConfigManager,
+        applyHotKey: @escaping (HotKeyConfig) -> Void,
+        applyTheme: @escaping (ThemeConfig) -> Void
+    ) {
         self.appState = appState
         self.configManager = configManager
         self.applyHotKey = applyHotKey
+        self.applyTheme = applyTheme
     }
 
     /**
@@ -42,6 +54,9 @@ final class SettingsWindowController {
                         if let hotKeyConfig = try self?.configManager.loadHotKeyConfig() {
                             self?.applyHotKey(hotKeyConfig)
                         }
+                        if let themeConfig = try self?.configManager.loadThemeConfig() {
+                            self?.applyTheme(themeConfig)
+                        }
                         self?.appState.statusMessage = "已重载配置"
                     } catch {
                         self?.appState.statusMessage = "重载失败：\(error.localizedDescription)"
@@ -62,12 +77,13 @@ final class SettingsWindowController {
                         NSWorkspace.shared.open(url)
                     }
                 },
-                applyHotKey: applyHotKey
+                applyHotKey: applyHotKey,
+                applyTheme: applyTheme
             )
         )
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 526, height: 590),
-            styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
+            contentRect: NSRect(x: 0, y: 0, width: Layout.minWindowWidth, height: Layout.minWindowHeight),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
@@ -75,6 +91,7 @@ final class SettingsWindowController {
         window.title = "QuickNav 设置"
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
+        window.minSize = NSSize(width: Layout.minWindowWidth, height: Layout.minWindowHeight)
         window.center()
         window.contentView = hostingView
         window.makeKeyAndOrderFront(nil)

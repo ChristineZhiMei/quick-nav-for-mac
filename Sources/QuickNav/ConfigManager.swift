@@ -39,6 +39,7 @@ final class ConfigManager {
     func reload() throws {
         try ensureConfigExists()
         _ = try Data(contentsOf: configFileURL)
+        try normalizeConfigFile()
     }
 
     /**
@@ -51,6 +52,19 @@ final class ConfigManager {
         let data = try Data(contentsOf: configFileURL)
         let config = try JSONDecoder().decode(QuickNavUserConfig.self, from: data)
         return try config.hotKey.validated()
+    }
+
+    /**
+     @name loadThemeConfig
+     @description 从 config.json 读取主题配置；旧配置缺失 theme 时使用默认主题并写回补齐。
+     */
+    func loadThemeConfig() throws -> ThemeConfig {
+        try ensureConfigExists()
+
+        let config = try loadUserConfig()
+        let data = try JSONEncoder.prettyPrinted.encode(config)
+        try data.write(to: configFileURL, options: .atomic)
+        return config.theme
     }
 
     /**
@@ -69,6 +83,34 @@ final class ConfigManager {
         try data.write(to: configFileURL, options: .atomic)
     }
 
+    /**
+     @name saveThemeConfig
+     @description 将主题配置写回 config.json，保留快捷键和菜单配置。
+     */
+    func saveThemeConfig(_ themeConfig: ThemeConfig) throws {
+        try ensureConfigExists()
+
+        var config = try loadUserConfig()
+        config.theme = themeConfig
+
+        let data = try JSONEncoder.prettyPrinted.encode(config)
+        try data.write(to: configFileURL, options: .atomic)
+    }
+
+    private func normalizeConfigFile() throws {
+        let config = try loadUserConfig()
+        let data = try JSONEncoder.prettyPrinted.encode(config)
+        try data.write(to: configFileURL, options: .atomic)
+    }
+
+    private func loadUserConfig() throws -> QuickNavUserConfig {
+        let data = try Data(contentsOf: configFileURL)
+        let decoder = JSONDecoder()
+        var config = try decoder.decode(QuickNavUserConfig.self, from: data)
+        config.theme = config.theme.migratingLegacyDefaultAccents
+        return config
+    }
+
     private var defaultConfig: [String: Any] {
         let data = (try? JSONEncoder().encode(defaultUserConfig)) ?? Data()
         let object = try? JSONSerialization.jsonObject(with: data)
@@ -78,21 +120,35 @@ final class ConfigManager {
     private var defaultUserConfig: QuickNavUserConfig {
         QuickNavUserConfig(
             hotKey: .default,
-            menu: QuickNavMenuConfig(
-                radius: Int(DesignTokens.Menu.radius),
-                deadZoneRadius: Int(DesignTokens.Menu.deadZoneRadius),
-                itemSize: Int(DesignTokens.Menu.itemSize),
-                items: RadialMenuView.items.map {
-                    QuickNavMenuItemConfig(id: $0.id, title: $0.title, systemImage: $0.systemImage)
-                }
-            )
+            theme: .default,
+            menu: .default
         )
     }
 }
 
 private struct QuickNavUserConfig: Codable {
     var hotKey: HotKeyConfig
+    var theme: ThemeConfig
     var menu: QuickNavMenuConfig
+
+    enum CodingKeys: String, CodingKey {
+        case hotKey
+        case theme
+        case menu
+    }
+
+    init(hotKey: HotKeyConfig, theme: ThemeConfig, menu: QuickNavMenuConfig) {
+        self.hotKey = hotKey
+        self.theme = theme
+        self.menu = menu
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        hotKey = try container.decodeIfPresent(HotKeyConfig.self, forKey: .hotKey) ?? .default
+        theme = try container.decodeIfPresent(ThemeConfig.self, forKey: .theme) ?? .default
+        menu = try container.decodeIfPresent(QuickNavMenuConfig.self, forKey: .menu) ?? QuickNavMenuConfig.default
+    }
 }
 
 private struct QuickNavMenuConfig: Codable {
@@ -100,6 +156,22 @@ private struct QuickNavMenuConfig: Codable {
     var deadZoneRadius: Int
     var itemSize: Int
     var items: [QuickNavMenuItemConfig]
+
+    static let `default` = QuickNavMenuConfig(
+        radius: 125,
+        deadZoneRadius: 37,
+        itemSize: 60,
+        items: [
+            QuickNavMenuItemConfig(id: "menu", title: "菜单", systemImage: "line.3.horizontal"),
+            QuickNavMenuItemConfig(id: "vscode", title: "VS Code", systemImage: "chevron.left.forwardslash.chevron.right"),
+            QuickNavMenuItemConfig(id: "terminal", title: "Terminal", systemImage: "terminal"),
+            QuickNavMenuItemConfig(id: "projects", title: "项目", systemImage: "folder"),
+            QuickNavMenuItemConfig(id: "docs", title: "文档", systemImage: "doc.text"),
+            QuickNavMenuItemConfig(id: "figma", title: "Figma", systemImage: "square.grid.2x2"),
+            QuickNavMenuItemConfig(id: "browser", title: "浏览器", systemImage: "safari"),
+            QuickNavMenuItemConfig(id: "reload", title: "重载", systemImage: "arrow.clockwise")
+        ]
+    )
 }
 
 private struct QuickNavMenuItemConfig: Codable {

@@ -8,18 +8,13 @@ import AppKit
 
 @MainActor
 final class StatusBarController: NSObject {
+    // AppState 类似前端里的全局 store：菜单项本身可以重建，但启用状态、快捷键状态要从这里读取。
     private let appState: AppState
 
     // NSStatusItem 是菜单栏入口本体，使用 squareLength 保证右上角稳定显示一个 Q。
     private let statusItem: NSStatusItem
 
-    // 启用状态菜单项需要保存引用，便于点击后刷新勾选状态。
-    private let enabledItem = NSMenuItem(title: "启用 QuickNav", action: #selector(toggleEnabled), keyEquivalent: "")
-
-    // 快捷键状态菜单项用于反馈 Carbon 注册是否成功。
-    private let hotKeyStatusItem = NSMenuItem(title: "快捷键：Command + Shift + D", action: nil, keyEquivalent: "")
-
-    // 状态栏 Settings 菜单项的回调，由 AppDelegate 接到 SettingsWindowController。
+    // 下面这些闭包类似前端组件的 props 事件回调：状态栏只负责触发，真正的业务逻辑由 AppDelegate 注入。
     var onOpenSettings: (() -> Void)?
     var onToggleEnabled: ((Bool) -> Void)?
     var onReloadConfig: (() -> Void)?
@@ -42,10 +37,6 @@ final class StatusBarController: NSObject {
      */
     func setHotKeyAvailable(_ isAvailable: Bool) {
         appState.isHotKeyAvailable = isAvailable
-        hotKeyStatusItem.title = isAvailable
-            ? "快捷键：\(appState.hotKeyDisplay)"
-            : "快捷键不可用：\(appState.hotKeyDisplay)"
-        hotKeyStatusItem.state = isAvailable ? .on : .off
         rebuildMenu()
     }
 
@@ -72,17 +63,26 @@ final class StatusBarController: NSObject {
     /**
      @name rebuildMenu
      @description 构建状态菜单。导航浮层不从这里打开，菜单只提供状态、关于和退出。
+     @discussion NSMenuItem 只能属于一个 NSMenu。这里每次重建都创建全新的 item，避免把旧菜单里的 item 再插入新菜单导致 AppKit 崩溃。
      */
     private func rebuildMenu() {
+        // 新建菜单类似前端里根据 state 重新 render 一棵菜单树；旧菜单会在 statusItem.menu 被替换后释放。
         let menu = NSMenu()
 
+        // 启用项只把当前 appState 渲染成勾选态；点击后状态写回 appState，再触发一次重建。
+        let enabledItem = NSMenuItem(title: "启用 QuickNav", action: #selector(toggleEnabled), keyEquivalent: "")
         enabledItem.target = self
         enabledItem.state = appState.isEnabled ? .on : .off
         menu.addItem(enabledItem)
 
-        hotKeyStatusItem.title = appState.isHotKeyAvailable
+        // 快捷键状态是只读展示项，告诉用户 Carbon 全局快捷键当前是否注册成功。
+        let hotKeyStatusItem = NSMenuItem(
+            title: appState.isHotKeyAvailable
             ? "快捷键：\(appState.hotKeyDisplay)"
-            : "快捷键不可用：\(appState.hotKeyDisplay)"
+            : "快捷键不可用：\(appState.hotKeyDisplay)",
+            action: nil,
+            keyEquivalent: ""
+        )
         hotKeyStatusItem.state = appState.isHotKeyAvailable ? .on : .off
         menu.addItem(hotKeyStatusItem)
 
@@ -132,7 +132,7 @@ final class StatusBarController: NSObject {
     @objc private func toggleEnabled() {
         let nextValue = !appState.isEnabled
         onToggleEnabled?(nextValue)
-        enabledItem.state = nextValue ? .on : .off
+        rebuildMenu()
     }
 
     @objc private func reloadConfig() {

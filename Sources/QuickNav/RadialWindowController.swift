@@ -28,8 +28,8 @@ final class RadialWindowController {
     // 选中项结算后交给 AppDelegate 统一分发到 ActionExecutor。
     private let onSelectItem: @MainActor (RadialMenuItem) -> Void
 
-    // 透明浮层窗口尺寸，需要容纳半径 140 的 8 个图标和标签。
-    private let windowSize = NSSize(width: 460, height: 460)
+    // 透明浮层窗口尺寸需要比图标布局更大一些，给圆形背景模糊扩散预留空间，避免 blur 边缘被裁切。
+    private let windowSize = NSSize(width: 520, height: 520)
 
     // SwiftUI 视图状态，AppKit 事件只更新这里，不直接操作视图层级。
     private let menuState = RadialMenuState()

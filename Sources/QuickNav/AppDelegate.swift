@@ -5,6 +5,7 @@
  @LastUpdatedBy Codex
  */
 import AppKit
+import Darwin
 import os
 
 @MainActor
@@ -33,15 +34,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // 导航窗口控制器集中维护浮层窗口、鼠标监听和光标隐藏状态。
     private var radialWindowController: RadialWindowController?
 
+    // SwiftPM 和 Xcode 都能直接启动 QuickNav。这里用进程级文件锁避免多个实例同时常驻菜单栏。
+    private var instanceLockFileDescriptor: CInt = -1
+
     /**
      @name applicationDidFinishLaunching
      @description 应用启动完成后装配核心控制器，并注册按住式全局快捷键。
      @link StatusBarController / RadialWindowController / HotKeyManager
      */
     func applicationDidFinishLaunching(_ notification: Notification) {
+        guard acquireSingleInstanceLock() else {
+            logger.info("Another QuickNav instance is already running. Terminating duplicate instance.")
+            NSApp.terminate(nil)
+            return
+        }
+
         do {
             try configManager.ensureConfigExists()
             appState.hotKeyConfig = try configManager.loadHotKeyConfig()
+            appState.themeConfig = try configManager.loadThemeConfig()
         } catch {
             appState.statusMessage = "配置不可用：\(error.localizedDescription)"
             logger.error("Failed to prepare config: \(error.localizedDescription, privacy: .public)")
@@ -55,6 +66,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             configManager: configManager,
             applyHotKey: { [weak self] config in
                 self?.applyHotKeyConfig(config, shouldSave: true)
+            },
+            applyTheme: { [weak self] config in
+                self?.applyThemeConfig(config, shouldSave: true)
             }
         )
         self.settingsWindowController = settingsWindowController
@@ -80,6 +94,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 try self?.configManager.reload()
                 if let hotKeyConfig = try self?.configManager.loadHotKeyConfig() {
                     self?.applyHotKeyConfig(hotKeyConfig, shouldSave: false)
+                }
+                if let themeConfig = try self?.configManager.loadThemeConfig() {
+                    self?.applyThemeConfig(themeConfig, shouldSave: false)
                 }
                 self?.appState.statusMessage = "已重载配置"
             } catch {
@@ -139,6 +156,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
      */
     func applicationWillTerminate(_ notification: Notification) {
         hotKeyManager?.unregister()
+        releaseSingleInstanceLock()
     }
 
     /**
@@ -161,5 +179,73 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             appState.statusMessage = "快捷键更新失败：\(error.localizedDescription)"
             logger.error("Failed to update hotkey: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /**
+     @name applyThemeConfig
+     @description 设置页应用主题时更新共享状态，并按需写回本地配置。
+     */
+    private func applyThemeConfig(_ config: ThemeConfig, shouldSave: Bool) {
+        do {
+            if shouldSave {
+                try configManager.saveThemeConfig(config)
+            }
+            appState.themeConfig = config
+            appState.statusMessage = "主题已更新"
+        } catch {
+            appState.statusMessage = "主题保存失败：\(error.localizedDescription)"
+            logger.error("Failed to save theme: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /**
+     @name acquireSingleInstanceLock
+     @description 通过 Application Support 下的 flock 文件锁保证同一用户会话中只运行一个 QuickNav 实例。
+     @discussion Xcode 调试和 swift run 可能同时启动不同路径的 QuickNav 二进制，单靠 bundle identifier 不稳定。
+     */
+    private func acquireSingleInstanceLock() -> Bool {
+        let fileManager = FileManager.default
+
+        guard let supportDirectory = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return true
+        }
+
+        let quickNavDirectory = supportDirectory.appendingPathComponent("QuickNav", isDirectory: true)
+        try? fileManager.createDirectory(at: quickNavDirectory, withIntermediateDirectories: true)
+
+        let lockURL = quickNavDirectory.appendingPathComponent("quicknav.lock")
+        let descriptor = open(lockURL.path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
+        guard descriptor >= 0 else {
+            return true
+        }
+
+        guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else {
+            close(descriptor)
+            return false
+        }
+
+        instanceLockFileDescriptor = descriptor
+        ftruncate(descriptor, 0)
+
+        let pidText = "\(getpid())\n"
+        pidText.withCString { pointer in
+            _ = write(descriptor, pointer, strlen(pointer))
+        }
+
+        return true
+    }
+
+    /**
+     @name releaseSingleInstanceLock
+     @description 应用退出时释放单实例文件锁，避免影响下一次正常启动。
+     */
+    private func releaseSingleInstanceLock() {
+        guard instanceLockFileDescriptor >= 0 else {
+            return
+        }
+
+        flock(instanceLockFileDescriptor, LOCK_UN)
+        close(instanceLockFileDescriptor)
+        instanceLockFileDescriptor = -1
     }
 }

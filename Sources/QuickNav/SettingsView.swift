@@ -8,29 +8,45 @@ import AppKit
 import SwiftUI
 
 struct SettingsView: View {
+    private enum Layout {
+        static let minWindowWidth: CGFloat = 556
+        static let minWindowHeight: CGFloat = 590
+        static let sidebarWidth: CGFloat = 190
+    }
+
     @ObservedObject var appState: AppState
+    @Environment(\.colorScheme) private var colorScheme
 
     let reloadConfig: () -> Void
     let openConfigFile: () -> Void
     let openConfigFolder: () -> Void
     let openAccessibilitySettings: () -> Void
     let applyHotKey: (HotKeyConfig) -> Void
+    let applyTheme: (ThemeConfig) -> Void
 
     @State private var selectedSection: SettingsSection = .general
+    private var palette: ThemePalette { appState.themePalette(for: colorScheme) }
 
     var body: some View {
         HStack(spacing: 0) {
             sidebar
             content
         }
-        .frame(width: 526, height: 590)
-        .background(SettingsTokens.surface)
+        .frame(
+            minWidth: Layout.minWindowWidth,
+            maxWidth: .infinity,
+            minHeight: Layout.minWindowHeight,
+            maxHeight: .infinity
+        )
+        .background(palette.surface)
+        .background(WindowAppearanceSync(mode: appState.themeConfig.mode))
+        .preferredColorScheme(appState.themeConfig.mode.preferredColorScheme)
     }
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(SettingsSection.allCases) { section in
-                SettingsNavRow(section: section, isActive: section == selectedSection)
+                SettingsNavRow(section: section, isActive: section == selectedSection, palette: palette)
                 .frame(maxWidth: .infinity)
                 .contentShape(Rectangle())
                 .onTapGesture {
@@ -43,48 +59,51 @@ struct SettingsView: View {
         .padding(.top, 64)
         .padding(.horizontal, 17)
         .padding(.bottom, 22)
-        .frame(width: 160)
+        .frame(width: Layout.sidebarWidth)
         .frame(maxHeight: .infinity)
-        .background(SettingsTokens.sidebar)
+        .background(palette.sidebar)
     }
 
     @ViewBuilder
     private var content: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            header
+        ScrollView(.vertical, showsIndicators: true) {
+            VStack(alignment: .leading, spacing: 22) {
+                header
 
-            switch selectedSection {
-            case .general:
-                generalSection
-            case .menu:
-                menuSection
-            case .actions:
-                actionsSection
-            case .permissions:
-                permissionsSection
-            case .advanced:
-                advancedSection
+                switch selectedSection {
+                case .general:
+                    generalSection
+                case .menu:
+                    menuSection
+                case .theme:
+                    themeSection
+                case .actions:
+                    actionsSection
+                case .advanced:
+                    advancedSection
+                }
+
+                Spacer(minLength: 0)
             }
-
-            Spacer()
+            .padding(.top, 72)
+            .padding(.horizontal, 36)
+            .padding(.bottom, 28)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .padding(.top, 72)
-        .padding(.horizontal, 36)
-        .padding(.bottom, 28)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(SettingsTokens.surface)
+        .background(palette.surface)
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(selectedSection.title)
                 .font(.system(size: 26, weight: .semibold))
-                .foregroundStyle(SettingsTokens.textPrimary)
+                .foregroundStyle(palette.textPrimary)
 
             Text(selectedSection.description)
                 .font(.system(size: 13))
                 .lineSpacing(3)
-                .foregroundStyle(SettingsTokens.textSecondary)
+                .foregroundStyle(palette.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -94,51 +113,93 @@ struct SettingsView: View {
             HotKeyRecorderRow(
                 currentText: appState.hotKeyDisplay,
                 isRecording: $appState.isRecordingHotKey,
+                palette: palette,
                 apply: applyHotKey
             )
-            ValueRow(title: "快捷键状态", value: appState.isHotKeyAvailable ? "已注册" : "不可用", systemImage: appState.isHotKeyAvailable ? "checkmark.circle" : "exclamationmark.triangle")
-
-            ButtonRow(title: "重载配置", subtitle: "重新读取本地配置文件。", systemImage: "arrow.clockwise", action: reloadConfig)
         }
     }
 
     private var menuSection: some View {
         VStack(spacing: 16) {
-            SliderRow(title: "菜单半径", value: $appState.menuRadius, range: 112...168, step: 1, suffix: "px")
-            SliderRow(title: "中心死区", value: $appState.deadZoneRadius, range: 24...56, step: 1, suffix: "px")
-            SliderRow(title: "图标尺寸", value: $appState.itemSize, range: 44...60, step: 1, suffix: "px")
+            SliderRow(title: "样式半径", value: $appState.menuRadius, range: 112...168, step: 1, suffix: "px", palette: palette)
+            SliderRow(title: "中心缓冲区", value: $appState.deadZoneRadius, range: 24...56, step: 1, suffix: "px", palette: palette)
+            SliderRow(title: "图标尺寸", value: $appState.itemSize, range: 44...60, step: 1, suffix: "px", palette: palette)
+            ToggleRow(title: "显示背景扩散", subtitle: "控制导航中心主题色扩散背景是否显示。", isOn: $appState.isBackgroundVisible, palette: palette)
+            SliderRow(title: "背景半径", value: $appState.backgroundRadius, range: 120...260, step: 1, suffix: "px", palette: palette)
+                .disabled(!appState.isBackgroundVisible)
+                .opacity(appState.isBackgroundVisible ? 1 : 0.45)
+            OpacitySliderRow(title: "背景透明度", value: $appState.backgroundOpacity, range: 0.06...0.36, step: 0.01, palette: palette)
+                .disabled(!appState.isBackgroundVisible)
+                .opacity(appState.isBackgroundVisible ? 1 : 0.45)
 
-            ButtonRow(title: "恢复默认布局", subtitle: "恢复当前设计稿中的默认几何参数。", systemImage: "arrow.counterclockwise") {
+            ButtonRow(title: "恢复默认布局", subtitle: "恢复当前设计稿中的默认几何参数。", systemImage: "arrow.counterclockwise", palette: palette) {
                 appState.menuRadius = DesignTokens.Menu.radius
                 appState.deadZoneRadius = DesignTokens.Menu.deadZoneRadius
                 appState.itemSize = DesignTokens.Menu.itemSize
-                appState.statusMessage = "已恢复菜单布局"
+                appState.isBackgroundVisible = DesignTokens.Menu.isBackgroundVisible
+                appState.backgroundRadius = DesignTokens.Menu.backgroundRadius
+                appState.backgroundOpacity = DesignTokens.Menu.backgroundOpacity
+                appState.statusMessage = "已恢复样式布局"
             }
+        }
+    }
+
+    private var themeSection: some View {
+        VStack(spacing: 14) {
+            Picker("外观模式", selection: themeBinding(\.mode)) {
+                ForEach(ThemeMode.allCases) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .tint(palette.accent)
+
+            PresetPickerGroup(
+                title: "明色主题",
+                appearance: .light,
+                selection: themeBinding(\.lightPreset),
+                customAccent: themeBinding(\.customLightAccent),
+                palette: palette
+            )
+
+            PresetPickerGroup(
+                title: "暗色主题",
+                appearance: .dark,
+                selection: themeBinding(\.darkPreset),
+                customAccent: themeBinding(\.customDarkAccent),
+                palette: palette
+            )
+
+            ThemePreview(palette: palette)
         }
     }
 
     private var actionsSection: some View {
         VStack(spacing: 10) {
             ForEach(RadialMenuView.items) { item in
-                ActionItemRow(item: item)
+                ActionItemRow(item: item, palette: palette)
             }
-        }
-    }
-
-    private var permissionsSection: some View {
-        VStack(spacing: 14) {
-            ValueRow(title: "全局快捷键", value: appState.isHotKeyAvailable ? "就绪" : "不可用", systemImage: "keyboard.badge.eye")
-            ValueRow(title: "指针跟踪", value: "本机会话", systemImage: "cursorarrow.motionlines")
-            ButtonRow(title: "打开辅助功能设置", subtitle: "如果全局输入不稳定，可在这里授权。", systemImage: "shield.checkerboard", action: openAccessibilitySettings)
         }
     }
 
     private var advancedSection: some View {
         VStack(spacing: 14) {
-            ButtonRow(title: "打开配置文件", subtitle: "~/Library/Application Support/QuickNav/config.json", systemImage: "doc.text", action: openConfigFile)
-            ButtonRow(title: "打开配置目录", subtitle: "Application Support/QuickNav", systemImage: "folder", action: openConfigFolder)
-            ButtonRow(title: "重载配置", subtitle: "检查配置文件是否可以正常读取。", systemImage: "arrow.clockwise", action: reloadConfig)
+            ButtonRow(title: "打开配置文件", subtitle: "~/Library/Application Support/QuickNav/config.json", systemImage: "doc.text", palette: palette, action: openConfigFile)
+            ButtonRow(title: "打开配置目录", subtitle: "Application Support/QuickNav", systemImage: "folder", palette: palette, action: openConfigFolder)
+            ButtonRow(title: "重载配置", subtitle: "检查配置文件是否可以正常读取。", systemImage: "arrow.clockwise", palette: palette, action: reloadConfig)
+            ButtonRow(title: "打开辅助功能设置", subtitle: "如果全局输入不稳定，可在这里授权。", systemImage: "shield.checkerboard", palette: palette, action: openAccessibilitySettings)
         }
+    }
+
+    private func themeBinding<Value>(_ keyPath: WritableKeyPath<ThemeConfig, Value>) -> Binding<Value> {
+        Binding(
+            get: { appState.themeConfig[keyPath: keyPath] },
+            set: { newValue in
+                var nextConfig = appState.themeConfig
+                nextConfig[keyPath: keyPath] = newValue
+                applyTheme(nextConfig)
+            }
+        )
     }
 
 }
@@ -146,8 +207,8 @@ struct SettingsView: View {
 private enum SettingsSection: String, CaseIterable, Identifiable {
     case general
     case menu
+    case theme
     case actions
-    case permissions
     case advanced
 
     var id: String { rawValue }
@@ -155,9 +216,9 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .general: "通用"
-        case .menu: "菜单"
+        case .menu: "样式"
+        case .theme: "主题"
         case .actions: "动作"
-        case .permissions: "权限"
         case .advanced: "高级"
         }
     }
@@ -166,8 +227,8 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .general: "gearshape"
         case .menu: "circle.dotted"
+        case .theme: "paintpalette"
         case .actions: "bolt"
-        case .permissions: "shield.checkerboard"
         case .advanced: "slider.horizontal.3"
         }
     }
@@ -175,9 +236,9 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     var description: String {
         switch self {
         case .general: "控制 QuickNav 是否响应全局快捷键，并查看当前启用状态。"
-        case .menu: "调整隐藏光标方向选择界面使用的径向菜单参数。"
+        case .menu: "调整隐藏光标方向选择界面使用的样式参数。"
+        case .theme: "配置明色、暗色和跟随系统时使用的主题色。"
         case .actions: "查看当前径向菜单项，以及每一项对应的内置动作。"
-        case .permissions: "检查系统能力，并在需要输入权限时跳转到 macOS 设置。"
         case .advanced: "打开或重载当前原型使用的本地配置文件。"
         }
     }
@@ -186,6 +247,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
 private struct SettingsNavRow: View {
     let section: SettingsSection
     let isActive: Bool
+    let palette: ThemePalette
 
     var body: some View {
         HStack(spacing: 10) {
@@ -196,11 +258,11 @@ private struct SettingsNavRow: View {
             Text(section.title)
                 .font(.system(size: 12, weight: isActive ? .medium : .regular))
         }
-        .foregroundStyle(isActive ? SettingsTokens.textPrimary : SettingsTokens.textSecondary)
+        .foregroundStyle(isActive ? palette.textPrimary : palette.textSecondary)
         .padding(.horizontal, 12)
         .frame(height: 34)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(isActive ? Color.white.opacity(0.10) : Color.clear)
+        .background(isActive ? palette.accent.opacity(0.16) : Color.clear)
         .contentShape(Rectangle())
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
@@ -210,31 +272,33 @@ private struct ValueRow: View {
     let title: String
     let value: String
     let systemImage: String
+    let palette: ThemePalette
 
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: systemImage)
                 .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(SettingsTokens.textSecondary)
+                .foregroundStyle(palette.textSecondary)
                 .frame(width: 18)
 
             Text(title)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(SettingsTokens.textPrimary)
+                .foregroundStyle(palette.textPrimary)
 
             Spacer()
 
             Text(value)
                 .font(.system(size: 12, weight: .medium, design: .monospaced))
-                .foregroundStyle(SettingsTokens.textPrimary)
+                .foregroundStyle(palette.textPrimary)
         }
-        .settingsRowBackground()
+        .settingsRowBackground(palette: palette)
     }
 }
 
 private struct HotKeyRecorderRow: View {
     let currentText: String
     @Binding var isRecording: Bool
+    let palette: ThemePalette
     let apply: (HotKeyConfig) -> Void
 
     var body: some View {
@@ -242,20 +306,20 @@ private struct HotKeyRecorderRow: View {
             HStack {
                 Label("快捷键", systemImage: "keyboard")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(SettingsTokens.textPrimary)
+                    .foregroundStyle(palette.textPrimary)
 
                 Spacer()
 
                 Text(isRecording ? "正在录入..." : currentText)
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundStyle(isRecording ? SettingsTokens.accent : SettingsTokens.textSecondary)
+                    .foregroundStyle(isRecording ? palette.accent : palette.textSecondary)
             }
 
             Text(isRecording ? "按下新的组合键，或按 Esc 取消。" : "点击此处后，直接按下新的快捷键组合。支持 A-Z、0-9。")
                 .font(.system(size: 11))
-                .foregroundStyle(SettingsTokens.textMuted)
+                .foregroundStyle(palette.textMuted)
         }
-        .settingsRowBackground(height: 72)
+        .settingsRowBackground(height: 72, palette: palette)
         .overlay(
             Group {
                 if isRecording {
@@ -376,31 +440,205 @@ private struct HotKeyCaptureView: NSViewRepresentable {
     }
 }
 
+private struct PresetPickerGroup: View {
+    let title: String
+    let appearance: ThemeAppearance
+    @Binding var selection: ThemePresetID
+    @Binding var customAccent: String
+    let palette: ThemePalette
+
+    // SwiftUI 没有 CSS flex-wrap 这个属性；LazyVGrid + adaptive GridItem 是最接近的写法。
+    // minimum 类似 flex item 的最小宽度，可用空间变大时系统会自动增加列数，变小时自动换行。
+    private let columns = [GridItem(.adaptive(minimum: 58, maximum: 76), spacing: 8)]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(palette.textPrimary)
+
+            LazyVGrid(columns: columns, spacing: 8) {
+                ForEach(ThemePresetID.allCases) { preset in
+                    PresetSwatch(
+                        preset: preset,
+                        appearance: appearance,
+                        customAccent: customAccent,
+                        isSelected: selection == preset,
+                        palette: palette
+                    ) {
+                        selection = preset
+                    }
+                }
+            }
+
+            if selection == .custom {
+                ColorPicker("自定义主题色", selection: customColorBinding)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(palette.textSecondary)
+            }
+        }
+        .settingsRowBackground(height: selection == .custom ? 154 : 124, palette: palette)
+    }
+
+    private var customColorBinding: Binding<Color> {
+        Binding(
+            get: { Color(hex: customAccent) },
+            set: { customAccent = $0.hexString }
+        )
+    }
+}
+
+private struct PresetSwatch: View {
+    let preset: ThemePresetID
+    let appearance: ThemeAppearance
+    let customAccent: String
+    let isSelected: Bool
+    let palette: ThemePalette
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 5) {
+                Circle()
+                    .fill(ThemePaletteFactory.accentPreview(for: preset, appearance: appearance, customHex: customAccent))
+                    .frame(width: 22, height: 22)
+                    .overlay(
+                        Circle()
+                            .stroke(isSelected ? palette.textPrimary : palette.border, lineWidth: isSelected ? 2 : 1)
+                    )
+
+                Text(preset.title)
+                    .font(.system(size: 9, weight: isSelected ? .semibold : .medium))
+                    .foregroundStyle(isSelected ? palette.textPrimary : palette.textMuted)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct ThemePreview: View {
+    let palette: ThemePalette
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("主题预览")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(palette.textPrimary)
+
+                Text("文字、卡片、选中态")
+                    .font(.system(size: 11))
+                    .foregroundStyle(palette.textSecondary)
+            }
+
+            Spacer()
+
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(palette.accent)
+                .frame(width: 42, height: 26)
+                .overlay(
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(palette.accentText)
+                )
+
+            Circle()
+                .fill(palette.accent)
+                .shadow(color: palette.accentShadow, radius: 8)
+                .frame(width: 16, height: 16)
+        }
+        .settingsRowBackground(height: 58, palette: palette)
+    }
+}
+
 private struct SliderRow: View {
     let title: String
     @Binding var value: CGFloat
     let range: ClosedRange<CGFloat>
     let step: CGFloat
     let suffix: String
+    let palette: ThemePalette
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(title)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(SettingsTokens.textPrimary)
+                    .foregroundStyle(palette.textPrimary)
 
                 Spacer()
 
                 Text("\(Int(value)) \(suffix)")
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundStyle(SettingsTokens.textSecondary)
+                    .foregroundStyle(palette.textSecondary)
             }
 
             Slider(value: $value, in: range, step: step)
-                .tint(SettingsTokens.accent)
+                .tint(palette.accent)
         }
-        .settingsRowBackground(height: 64)
+        .settingsRowBackground(height: 64, palette: palette)
+    }
+}
+
+private struct OpacitySliderRow: View {
+    let title: String
+    @Binding var value: CGFloat
+    let range: ClosedRange<CGFloat>
+    let step: CGFloat
+    let palette: ThemePalette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(palette.textPrimary)
+
+                Spacer()
+
+                Text("\(Int(round(value * 100)))%")
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundStyle(palette.textSecondary)
+            }
+
+            // SwiftUI Slider 类似 HTML range input；这里把 0...1 的透明度显示为百分比，读起来更直观。
+            Slider(value: $value, in: range, step: step)
+                .tint(palette.accent)
+        }
+        .settingsRowBackground(height: 64, palette: palette)
+    }
+}
+
+private struct ToggleRow: View {
+    let title: String
+    let subtitle: String
+    @Binding var isOn: Bool
+    let palette: ThemePalette
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(palette.textPrimary)
+
+                Text(subtitle)
+                    .font(.system(size: 11))
+                    .foregroundStyle(palette.textMuted)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            // Toggle 使用 macOS 原生 switch 风格；可以理解成前端里的受控 checkbox。
+            Toggle("", isOn: $isOn)
+                .toggleStyle(.switch)
+                .tint(palette.accent)
+                .labelsHidden()
+        }
+        .settingsRowBackground(height: 58, palette: palette)
     }
 }
 
@@ -408,6 +646,7 @@ private struct ButtonRow: View {
     let title: String
     let subtitle: String
     let systemImage: String
+    let palette: ThemePalette
     let action: () -> Void
 
     var body: some View {
@@ -415,23 +654,23 @@ private struct ButtonRow: View {
             HStack(spacing: 12) {
                 Image(systemName: systemImage)
                     .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(SettingsTokens.textSecondary)
+                    .foregroundStyle(palette.textSecondary)
                     .frame(width: 18)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(SettingsTokens.textPrimary)
+                        .foregroundStyle(palette.textPrimary)
 
                     Text(subtitle)
                         .font(.system(size: 11))
-                        .foregroundStyle(SettingsTokens.textMuted)
+                        .foregroundStyle(palette.textMuted)
                         .lineLimit(1)
                 }
 
                 Spacer()
             }
-            .settingsRowBackground()
+            .settingsRowBackground(palette: palette)
         }
         .buttonStyle(.plain)
     }
@@ -439,26 +678,27 @@ private struct ButtonRow: View {
 
 private struct ActionItemRow: View {
     let item: RadialMenuItem
+    let palette: ThemePalette
 
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: item.systemImage)
                 .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(SettingsTokens.textSecondary)
+                .foregroundStyle(palette.textSecondary)
                 .frame(width: 18)
 
             Text(item.title)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(SettingsTokens.textPrimary)
+                .foregroundStyle(palette.textPrimary)
 
             Spacer()
 
             Text(actionLabel)
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .foregroundStyle(SettingsTokens.textSecondary)
+                .foregroundStyle(palette.textSecondary)
                 .lineLimit(1)
         }
-        .settingsRowBackground(height: 38)
+        .settingsRowBackground(height: 38, palette: palette)
     }
 
     private var actionLabel: String {
@@ -478,27 +718,45 @@ private struct ActionItemRow: View {
 }
 
 private extension View {
-    func settingsRowBackground(height: CGFloat = 44) -> some View {
+    func settingsRowBackground(height: CGFloat = 44, palette: ThemePalette) -> some View {
         self
             .padding(.horizontal, 14)
             .frame(height: height)
             .frame(maxWidth: .infinity)
-            .background(Color.white.opacity(0.05))
+            .background(palette.row)
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    .stroke(palette.border, lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 
-private enum SettingsTokens {
-    static let surface = Color(red: 0.067, green: 0.067, blue: 0.075)
-    static let sidebar = Color(red: 0.051, green: 0.051, blue: 0.055)
-    static let textPrimary = Color(red: 0.96, green: 0.96, blue: 0.97)
-    static let textSecondary = Color(red: 0.63, green: 0.63, blue: 0.67)
-    static let textMuted = Color(red: 0.44, green: 0.44, blue: 0.48)
-    static let accent = Color(red: 1.0, green: 0.27, blue: 0.24)
-    static let success = Color(red: 0.19, green: 0.82, blue: 0.35)
-    static let warning = Color(red: 0.95, green: 0.66, blue: 0.20)
+private struct WindowAppearanceSync: NSViewRepresentable {
+    let mode: ThemeMode
+
+    func makeNSView(context: Context) -> NSView {
+        NSView(frame: .zero)
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            nsView.window?.appearance = mode.nsAppearance
+        }
+    }
+}
+
+private extension Color {
+    var hexString: String {
+        let nsColor = NSColor(self)
+        guard let color = nsColor.usingColorSpace(.sRGB) else {
+            return "#FF453A"
+        }
+
+        let red = Int(round(color.redComponent * 255))
+        let green = Int(round(color.greenComponent * 255))
+        let blue = Int(round(color.blueComponent * 255))
+
+        return String(format: "#%02X%02X%02X", red, green, blue)
+    }
 }
