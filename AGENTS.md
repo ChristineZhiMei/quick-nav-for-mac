@@ -1,5 +1,28 @@
 # QuickNav 项目协作规则
 
+## 版本分支与提交规则
+
+- `main` 只保存已经完成并验证过的稳定版本结果。不要直接在 `main` 上开发功能。
+- 每个版本开始开发前，先从最新 `main` 创建版本分支，命名为 `release/<version>`，例如 `release/0.3.0`、`release/0.4.0`、`release/1.0.0`。
+- 版本分支代表该版本的集成开发线。当前项目的 V0.3 开发分支是 `release/0.3.0`。
+- 如果需要给某个版本创建测试版，从对应版本分支切出预发布验证分支，命名为 `release/<version>-beta.<n>`，例如 `release/0.3.0-beta.1`。不要使用 `0.3.0bata`、`0.3.0beta` 这类非标准写法。
+- beta 分支只用于打包、验收和修复该轮测试发现的问题。下一轮测试从最新版本分支或上一轮 beta 修复结果切出 `release/<version>-beta.<n+1>`。
+- beta 测试通过后，把需要保留的修复合回正式版本分支 `release/<version>`；正式版本仍在 `release/<version>` 上收口，并最终合并回 `main`。
+- 如果一个版本内包含较独立的功能，可以从对应版本分支再切功能分支，命名为 `feature/<short-name>`，例如 `feature/command-action`。功能完成后先合回版本分支。
+- 修复分支使用 `fix/<short-name>`，例如 `fix/hotkey-registration`。修复目标是哪个版本，就从哪个版本分支切出并合回哪个版本分支。
+- 版本完成后，先确认 `swift build` 通过，再把 `release/<version>` 合并回 `main`，然后在 `main` 上打正式 tag，tag 命名为 `v<version>`，例如 `v0.3.0`。测试版 tag 命名为 `v<version>-beta.<n>`，例如 `v0.3.0-beta.1`。
+- 下一个版本必须从合并后的最新 `main` 创建新的 `release/<next-version>` 分支，避免跨版本开发状态互相污染。
+- 提交信息使用 Conventional Commits 格式：`<type>[optional scope]: <description>`。
+- 常用提交类型：
+  - `feat`: 新功能，例如 `feat(action): add command action support`。
+  - `fix`: 缺陷修复，例如 `fix(config): handle invalid menu items`。
+  - `docs`: 文档更新，例如 `docs: add release branch workflow`。
+  - `refactor`: 不改变行为的重构，例如 `refactor(settings): split theme controls`。
+  - `test`: 测试新增或调整，例如 `test(config): cover legacy action migration`。
+  - `chore`: 构建、工具或维护事项，例如 `chore: update package metadata`。
+- 提交描述使用英文祈使句或简短动词短语，首字母小写，不以句号结尾。
+- 如果提交包含破坏性变更，在提交正文中写 `BREAKING CHANGE: <description>`。
+
 ## 代码注释要求
 
 - 本项目面向 Swift 和 macOS 原生应用开发初学者维护，新增或大幅修改 Swift 代码时，注释需要比常规项目更细致。
