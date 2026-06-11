@@ -5,6 +5,7 @@
  @LastUpdatedBy Codex
  */
 import AppKit
+import QuickNavCore
 import SwiftUI
 
 struct SettingsView: View {
@@ -133,12 +134,12 @@ struct SettingsView: View {
                 .opacity(appState.isBackgroundVisible ? 1 : 0.45)
 
             ButtonRow(title: "恢复默认布局", subtitle: "恢复当前设计稿中的默认几何参数。", systemImage: "arrow.counterclockwise", palette: palette) {
-                appState.menuRadius = DesignTokens.Menu.radius
-                appState.deadZoneRadius = DesignTokens.Menu.deadZoneRadius
-                appState.itemSize = DesignTokens.Menu.itemSize
+                appState.menuRadius = CGFloat(DesignTokens.Menu.radius)
+                appState.deadZoneRadius = CGFloat(DesignTokens.Menu.deadZoneRadius)
+                appState.itemSize = CGFloat(DesignTokens.Menu.itemSize)
                 appState.isBackgroundVisible = DesignTokens.Menu.isBackgroundVisible
-                appState.backgroundRadius = DesignTokens.Menu.backgroundRadius
-                appState.backgroundOpacity = DesignTokens.Menu.backgroundOpacity
+                appState.backgroundRadius = CGFloat(DesignTokens.Menu.backgroundRadius)
+                appState.backgroundOpacity = CGFloat(DesignTokens.Menu.backgroundOpacity)
                 appState.statusMessage = "已恢复样式布局"
             }
         }
@@ -176,7 +177,7 @@ struct SettingsView: View {
 
     private var actionsSection: some View {
         VStack(spacing: 10) {
-            ForEach(RadialMenuView.items) { item in
+            ForEach(appState.menuConfig.items) { item in
                 ActionItemRow(item: item, palette: palette)
             }
         }
@@ -677,7 +678,7 @@ private struct ButtonRow: View {
 }
 
 private struct ActionItemRow: View {
-    let item: RadialMenuItem
+    let item: NavigationItem
     let palette: ThemePalette
 
     var body: some View {

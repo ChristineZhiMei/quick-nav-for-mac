@@ -6,6 +6,7 @@
  */
 import Carbon
 import Foundation
+import QuickNavCore
 
 // Carbon 注册或事件处理失败时抛出的轻量错误，供菜单栏展示 hotkey 不可用状态。
 enum HotKeyError: LocalizedError {

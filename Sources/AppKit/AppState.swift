@@ -5,6 +5,7 @@
  @LastUpdatedBy Codex
  */
 import Foundation
+import QuickNavCore
 import SwiftUI
 
 @MainActor
@@ -21,6 +22,9 @@ final class AppState: ObservableObject {
     // 全应用主题配置，设置页和径向导航都从这里派生语义色板。
     @Published var themeConfig = ThemeConfig.default
 
+    // 当前径向菜单配置。它是 SwiftUI 视图、窗口命中算法和设置页动作列表的共同数据源。
+    @Published var menuConfig = QuickNavMenuConfig.default
+
     // 设置页正在录入新快捷键时，全局快捷键事件不应打开导航。
     @Published var isRecordingHotKey = false
 
@@ -29,27 +33,41 @@ final class AppState: ObservableObject {
     }
 
     // 菜单几何参数先同步设计默认值，后续接 JSON 配置时从 ConfigManager 写入。
-    @Published var menuRadius = DesignTokens.Menu.radius
+    @Published var menuRadius = CGFloat(DesignTokens.Menu.radius)
 
     // 中心缓冲区是导航中心“不选中任何应用”的安全范围，类似前端交互里的 dead area。
-    @Published var deadZoneRadius = DesignTokens.Menu.deadZoneRadius
+    @Published var deadZoneRadius = CGFloat(DesignTokens.Menu.deadZoneRadius)
 
     // 径向菜单项的图标盒子尺寸，命中检测也会用它推导每个应用入口的可选中范围。
-    @Published var itemSize = DesignTokens.Menu.itemSize
+    @Published var itemSize = CGFloat(DesignTokens.Menu.itemSize)
 
     // 控制导航背后的主题色扩散是否显示，关闭后只保留中心缓冲区和菜单项。
     @Published var isBackgroundVisible = DesignTokens.Menu.isBackgroundVisible
 
     // 背景半径控制径向渐变扩散到多远，类似 CSS radial-gradient 的结束半径。
-    @Published var backgroundRadius = DesignTokens.Menu.backgroundRadius
+    @Published var backgroundRadius = CGFloat(DesignTokens.Menu.backgroundRadius)
 
     // 背景透明度控制扩散中心的最大 alpha，数值越大主题色越明显。
-    @Published var backgroundOpacity = DesignTokens.Menu.backgroundOpacity
+    @Published var backgroundOpacity = CGFloat(DesignTokens.Menu.backgroundOpacity)
 
     // 状态栏和设置页底部共享的轻量反馈。
     @Published var statusMessage = "就绪"
 
     func themePalette(for colorScheme: ColorScheme) -> ThemePalette {
         ThemePaletteFactory.palette(for: themeConfig, colorScheme: colorScheme)
+    }
+
+    /**
+     @name applyMenuConfig
+     @description 将 Core 菜单配置同步到设置页可编辑的运行态字段，类似把服务端配置 hydrate 到前端 store。
+     */
+    func applyMenuConfig(_ config: QuickNavMenuConfig) {
+        menuConfig = config
+        menuRadius = CGFloat(config.radius)
+        deadZoneRadius = CGFloat(config.deadZoneRadius)
+        itemSize = CGFloat(config.itemSize)
+        isBackgroundVisible = config.isBackgroundVisible
+        backgroundRadius = CGFloat(config.backgroundRadius)
+        backgroundOpacity = CGFloat(config.backgroundOpacity)
     }
 }

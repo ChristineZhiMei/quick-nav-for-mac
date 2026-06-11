@@ -5,6 +5,7 @@
  @LastUpdatedBy Codex
  */
 import AppKit
+import QuickNavCore
 import SwiftUI
 import os
 
@@ -26,7 +27,7 @@ final class RadialWindowController {
     private let appState: AppState
 
     // 选中项结算后交给 AppDelegate 统一分发到 ActionExecutor。
-    private let onSelectItem: @MainActor (RadialMenuItem) -> Void
+    private let onSelectItem: @MainActor (NavigationItem) -> Void
 
     // 透明浮层窗口尺寸需要比图标布局更大一些，给圆形背景模糊扩散预留空间，避免 blur 边缘被裁切。
     private let windowSize = NSSize(width: 520, height: 520)
@@ -58,7 +59,7 @@ final class RadialWindowController {
     // 光标所在显示器，用于多屏场景下隐藏/恢复正确 display 的系统光标。
     private var cursorDisplayID = CGMainDisplayID()
 
-    init(appState: AppState, onSelectItem: @escaping @MainActor (RadialMenuItem) -> Void) {
+    init(appState: AppState, onSelectItem: @escaping @MainActor (NavigationItem) -> Void) {
         self.appState = appState
         self.onSelectItem = onSelectItem
     }
@@ -313,13 +314,13 @@ final class RadialWindowController {
      @description 用红点和图标中心距离做真实命中，只有进入图标区域才选中，避免按角度提前高亮。
      */
     private func selectedItemID(cursorOffset: CGSize) -> String? {
-        let hitRadius = appState.itemSize / 2 + 8
-        let cursorPoint = CGPoint(x: cursorOffset.width, y: cursorOffset.height)
-
-        return RadialMenuView.items.enumerated().first { index, _ in
-            let itemPoint = RadialMenuView.visualPosition(for: index, radius: appState.menuRadius)
-            return hypot(cursorPoint.x - itemPoint.x, cursorPoint.y - itemPoint.y) <= hitRadius
-        }?.element.id
+        RadialMenuGeometry.selectedItemID(
+            cursorOffset: RadialPoint(x: Double(cursorOffset.width), y: Double(cursorOffset.height)),
+            items: appState.menuConfig.items,
+            radius: Double(appState.menuRadius),
+            itemSize: Double(appState.itemSize),
+            deadZoneRadius: Double(appState.deadZoneRadius)
+        )
     }
 
     /**
@@ -340,7 +341,7 @@ final class RadialWindowController {
      @description 命中任意菜单项时统一回调上层执行动作。
      */
     private func settleSelectionIfNeeded() {
-        guard let selectedItem = RadialMenuView.items.first(where: { $0.id == menuState.selectedItemID }) else {
+        guard let selectedItem = appState.menuConfig.items.first(where: { $0.id == menuState.selectedItemID }) else {
             return
         }
 

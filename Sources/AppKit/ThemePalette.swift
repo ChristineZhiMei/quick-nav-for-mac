@@ -1,105 +1,20 @@
 /**
- @SkillID QuickNavThemeConfig
- @Description 定义 QuickNav 主题配置、预设色和语义色板，供设置页与径向导航共享。
- @Capabilities 支持跟随系统/明色/暗色模式、明暗预设主题、自定义 accent、语义 token 派生。
+ @SkillID QuickNavThemePalette
+ @Description 将 Core 主题配置派生为 SwiftUI/AppKit 可以直接渲染的语义色板。
+ @Capabilities 解析明暗模式、生成 SwiftUI Color、提供 NSAppearance/ColorScheme 转换、计算 accent 对比文字。
  @LastUpdatedBy Codex
  */
-import Foundation
 import AppKit
+import QuickNavCore
 import SwiftUI
 
-enum ThemeMode: String, Codable, CaseIterable, Identifiable {
-    case system
+/// AppKit 层使用的明暗外观枚举，用于从配置值推导实际渲染色。
+enum ThemeAppearance {
     case light
     case dark
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .system: "跟随系统"
-        case .light: "明色"
-        case .dark: "暗色"
-        }
-    }
-
-    var preferredColorScheme: ColorScheme? {
-        switch self {
-        case .system:
-            return nil
-        case .light:
-            return .light
-        case .dark:
-            return .dark
-        }
-    }
-
-    var nsAppearance: NSAppearance? {
-        switch self {
-        case .system:
-            return nil
-        case .light:
-            return NSAppearance(named: .aqua)
-        case .dark:
-            return NSAppearance(named: .darkAqua)
-        }
-    }
 }
 
-enum ThemePresetID: String, Codable, CaseIterable, Identifiable {
-    case crimson
-    case rose
-    case blue
-    case violet
-    case emerald
-    case amber
-    case custom
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .crimson: "陶粉"
-        case .rose: "Raycast 红"
-        case .blue: "雾蓝"
-        case .violet: "灰紫"
-        case .emerald: "鼠尾草"
-        case .amber: "暖沙"
-        case .custom: "自定义"
-        }
-    }
-}
-
-struct ThemeConfig: Codable, Equatable {
-    var mode: ThemeMode
-    var lightPreset: ThemePresetID
-    var darkPreset: ThemePresetID
-    var customLightAccent: String
-    var customDarkAccent: String
-
-    static let `default` = ThemeConfig(
-        mode: .system,
-        lightPreset: .crimson,
-        darkPreset: .crimson,
-        customLightAccent: "#B76E79",
-        customDarkAccent: "#C9828B"
-    )
-
-    var migratingLegacyDefaultAccents: ThemeConfig {
-        var next = self
-
-        // 旧版本默认自定义色是高饱和红色。这里仅迁移这些旧默认值，不覆盖用户改过的其它自定义色。
-        if next.customLightAccent.normalizedHexString == "#E5484D" {
-            next.customLightAccent = Self.default.customLightAccent
-        }
-        if next.customDarkAccent.normalizedHexString == "#FF453A" {
-            next.customDarkAccent = Self.default.customDarkAccent
-        }
-
-        return next
-    }
-}
-
+/// SwiftUI 视图消费的语义色板，类似前端 design token 编译后的 CSS variables。
 struct ThemePalette {
     let surface: Color
     let sidebar: Color
@@ -114,11 +29,6 @@ struct ThemePalette {
     let accentShadow: Color
     let success: Color
     let warning: Color
-}
-
-enum ThemeAppearance {
-    case light
-    case dark
 }
 
 @MainActor
@@ -278,6 +188,30 @@ enum ThemePaletteFactory {
     }
 }
 
+extension ThemeMode {
+    var preferredColorScheme: ColorScheme? {
+        switch self {
+        case .system:
+            return nil
+        case .light:
+            return .light
+        case .dark:
+            return .dark
+        }
+    }
+
+    var nsAppearance: NSAppearance? {
+        switch self {
+        case .system:
+            return nil
+        case .light:
+            return NSAppearance(named: .aqua)
+        case .dark:
+            return NSAppearance(named: .darkAqua)
+        }
+    }
+}
+
 extension Color {
     init(hex: String) {
         let sanitized = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#")).uppercased()
@@ -289,12 +223,5 @@ extension Color {
         let blue = Double(value & 0x0000FF) / 255.0
 
         self.init(red: red, green: green, blue: blue)
-    }
-}
-
-private extension String {
-    var normalizedHexString: String {
-        let sanitized = trimmingCharacters(in: CharacterSet(charactersIn: "#")).uppercased()
-        return "#\(sanitized)"
     }
 }

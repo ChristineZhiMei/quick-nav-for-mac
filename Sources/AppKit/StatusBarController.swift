@@ -5,6 +5,7 @@
  @LastUpdatedBy Codex
  */
 import AppKit
+import QuickNavCore
 
 @MainActor
 final class StatusBarController: NSObject {

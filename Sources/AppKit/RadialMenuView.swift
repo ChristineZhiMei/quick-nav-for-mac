@@ -1,62 +1,36 @@
 /**
  @SkillID QuickNavRadialSurface
- @Description SwiftUI 径向导航界面，展示 8 个方向项、中心缓冲区和隐藏光标的红色替代圆点。
- @Capabilities 按状态高亮命中项、提供图标视觉坐标给 AppKit 命中算法、显示中心缓冲区、渲染红点光标。
+ @Description SwiftUI 径向导航界面，只负责渲染 Core 提供的菜单项、中心缓冲区和隐藏光标替代红点。
+ @Capabilities 按状态高亮命中项、把 Core 几何坐标转换为 SwiftUI offset、显示中心缓冲区、渲染红点光标。
  @LastUpdatedBy Codex
  */
+import QuickNavCore
 import SwiftUI
-
-// 径向菜单项模型。每个项都带一个基础动作，执行逻辑交给 ActionExecutor。
-struct RadialMenuItem: Identifiable {
-    let id: String
-    let title: String
-    let systemImage: String
-    let action: RadialMenuAction
-}
-
-enum RadialMenuAction {
-    case settings
-    case openApp(bundleIdentifier: String, fallbackPath: String?)
-    case openFolder(String)
-    case openURL(String)
-    case reloadConfig
-}
 
 struct RadialMenuView: View {
     @Environment(\.colorScheme) private var colorScheme
 
-    static let items: [RadialMenuItem] = [
-        .init(id: "menu", title: "菜单", systemImage: "line.3.horizontal", action: .settings),
-        .init(id: "vscode", title: "VS Code", systemImage: "chevron.left.forwardslash.chevron.right", action: .openApp(bundleIdentifier: "com.microsoft.VSCode", fallbackPath: "/Applications/Visual Studio Code.app")),
-        .init(id: "terminal", title: "Terminal", systemImage: "terminal", action: .openApp(bundleIdentifier: "com.apple.Terminal", fallbackPath: "/System/Applications/Utilities/Terminal.app")),
-        .init(id: "projects", title: "项目", systemImage: "folder", action: .openFolder("~/Documents/code")),
-        .init(id: "docs", title: "文档", systemImage: "doc.text", action: .openFolder("~/Documents")),
-        .init(id: "figma", title: "Figma", systemImage: "square.grid.2x2", action: .openApp(bundleIdentifier: "com.figma.Desktop", fallbackPath: nil)),
-        .init(id: "browser", title: "浏览器", systemImage: "safari", action: .openURL("https://www.google.com")),
-        .init(id: "reload", title: "重载", systemImage: "arrow.clockwise", action: .reloadConfig)
-    ]
-
-    /**
-     @name visualPosition
-     @description 返回菜单项相对中心的 SwiftUI 坐标。y 轴向下为正，因此这里对 sin 取反。
-     @link RadialWindowController.selectedItemID
-     */
-    static func visualPosition(for index: Int, total: Int = items.count, radius: CGFloat = DesignTokens.Menu.radius) -> CGPoint {
-        let degrees = Double(index) * 360 / Double(total)
-        let radians = degrees * .pi / 180
-
-        return CGPoint(
-            x: cos(radians) * radius,
-            y: -sin(radians) * radius
-        )
-    }
-
     // 来自 AppKit 控制器的共享状态，决定高亮项和红点位置。
     @ObservedObject var state: RadialMenuState
+
+    // AppState 类似前端里的全局 store，提供主题、几何参数和当前配置菜单项。
     @ObservedObject var appState: AppState
 
     private var palette: ThemePalette {
         appState.themePalette(for: colorScheme)
+    }
+
+    private var items: [NavigationItem] {
+        appState.menuConfig.items
+    }
+
+    /**
+     @name visualPosition
+     @description 将 Core 的 Double 坐标转换成 SwiftUI 的 CGPoint；视图不保存几何算法。
+     */
+    static func visualPosition(for index: Int, total: Int, radius: CGFloat) -> CGPoint {
+        let point = RadialMenuGeometry.visualPosition(for: index, total: total, radius: Double(radius))
+        return CGPoint(x: point.x, y: point.y)
     }
 
     var body: some View {
@@ -71,7 +45,7 @@ struct RadialMenuView: View {
 
             CancelZoneView(radius: appState.deadZoneRadius, palette: palette)
 
-            ForEach(Array(Self.items.enumerated()), id: \.element.id) { index, item in
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                 radialItem(item, index: index)
             }
 
@@ -87,16 +61,16 @@ struct RadialMenuView: View {
      @name radialItem
      @description 渲染单个方向项。只有红点进入图标命中区时才进入 active 状态并轻微放大。
      */
-    private func radialItem(_ item: RadialMenuItem, index: Int) -> some View {
-        let position = Self.visualPosition(for: index, radius: appState.menuRadius)
+    private func radialItem(_ item: NavigationItem, index: Int) -> some View {
+        let position = Self.visualPosition(for: index, total: items.count, radius: appState.menuRadius)
         let isActive = item.id == state.selectedItemID
 
         return VStack(spacing: 5) {
             ZStack {
-                RoundedRectangle(cornerRadius: DesignTokens.Radius.item, style: .continuous)
+                RoundedRectangle(cornerRadius: CGFloat(DesignTokens.Radius.item), style: .continuous)
                     .fill(isActive ? palette.accent : palette.row)
                     .overlay(
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.item, style: .continuous)
+                        RoundedRectangle(cornerRadius: CGFloat(DesignTokens.Radius.item), style: .continuous)
                             .stroke(isActive ? palette.accent.opacity(0.35) : palette.border, lineWidth: 1)
                     )
                     .shadow(

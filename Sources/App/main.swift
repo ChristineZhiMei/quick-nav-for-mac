@@ -5,6 +5,7 @@
  @LastUpdatedBy Codex
  */
 import AppKit
+import QuickNavAppKit
 
 // SwiftPM 可执行程序入口：手动创建 AppKit 应用循环，而不是依赖 SwiftUI @main。
 let app = NSApplication.shared

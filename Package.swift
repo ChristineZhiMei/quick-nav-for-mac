@@ -8,9 +8,24 @@ let package = Package(
         .macOS(.v13)
     ],
     targets: [
+        .target(
+            name: "QuickNavCore",
+            path: "Sources/Core"
+        ),
+        .target(
+            name: "QuickNavAppKit",
+            dependencies: ["QuickNavCore"],
+            path: "Sources/AppKit"
+        ),
         .executableTarget(
             name: "QuickNav",
-            path: "Sources/QuickNav"
+            dependencies: ["QuickNavAppKit"],
+            path: "Sources/App"
+        ),
+        .testTarget(
+            name: "QuickNavCoreTests",
+            dependencies: ["QuickNavCore"],
+            path: "Tests/CoreTests"
         )
     ]
 )

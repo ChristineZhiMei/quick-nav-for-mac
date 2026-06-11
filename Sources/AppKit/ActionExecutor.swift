@@ -6,6 +6,7 @@
  */
 import AppKit
 import Foundation
+import QuickNavCore
 import os
 
 @MainActor
@@ -25,7 +26,7 @@ final class ActionExecutor {
      @name execute
      @description 根据菜单项动作类型分发系统调用；失败只更新状态，不让菜单流程崩溃。
      */
-    func execute(_ item: RadialMenuItem) {
+    func execute(_ item: NavigationItem) {
         do {
             switch item.action {
             case .settings:

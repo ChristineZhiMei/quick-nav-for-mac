@@ -5,6 +5,7 @@
  @LastUpdatedBy Codex
  */
 import AppKit
+import QuickNavCore
 import SwiftUI
 
 @MainActor

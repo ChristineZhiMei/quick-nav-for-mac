@@ -5,6 +5,7 @@
  @LastUpdatedBy Codex
  */
 import Foundation
+import QuickNavCore
 
 @MainActor
 final class ConfigManager {
@@ -34,7 +35,7 @@ final class ConfigManager {
 
     /**
      @name reload
-     @description 验证配置文件存在并可读取。真实 JSON 驱动菜单会在后续接入。
+     @description 验证配置文件存在并可读取，然后用 Core 配置模型补齐缺失字段。
      */
     func reload() throws {
         try ensureConfigExists()
@@ -65,6 +66,15 @@ final class ConfigManager {
         let data = try JSONEncoder.prettyPrinted.encode(config)
         try data.write(to: configFileURL, options: .atomic)
         return config.theme
+    }
+
+    /**
+     @name loadMenuConfig
+     @description 从 config.json 读取菜单几何和内置动作列表；缺失时使用 Core 默认目录。
+     */
+    func loadMenuConfig() throws -> QuickNavMenuConfig {
+        try ensureConfigExists()
+        return try loadUserConfig().menu
     }
 
     /**
@@ -118,66 +128,8 @@ final class ConfigManager {
     }
 
     private var defaultUserConfig: QuickNavUserConfig {
-        QuickNavUserConfig(
-            hotKey: .default,
-            theme: .default,
-            menu: .default
-        )
+        .default
     }
-}
-
-private struct QuickNavUserConfig: Codable {
-    var hotKey: HotKeyConfig
-    var theme: ThemeConfig
-    var menu: QuickNavMenuConfig
-
-    enum CodingKeys: String, CodingKey {
-        case hotKey
-        case theme
-        case menu
-    }
-
-    init(hotKey: HotKeyConfig, theme: ThemeConfig, menu: QuickNavMenuConfig) {
-        self.hotKey = hotKey
-        self.theme = theme
-        self.menu = menu
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        hotKey = try container.decodeIfPresent(HotKeyConfig.self, forKey: .hotKey) ?? .default
-        theme = try container.decodeIfPresent(ThemeConfig.self, forKey: .theme) ?? .default
-        menu = try container.decodeIfPresent(QuickNavMenuConfig.self, forKey: .menu) ?? QuickNavMenuConfig.default
-    }
-}
-
-private struct QuickNavMenuConfig: Codable {
-    var radius: Int
-    var deadZoneRadius: Int
-    var itemSize: Int
-    var items: [QuickNavMenuItemConfig]
-
-    static let `default` = QuickNavMenuConfig(
-        radius: 125,
-        deadZoneRadius: 37,
-        itemSize: 60,
-        items: [
-            QuickNavMenuItemConfig(id: "menu", title: "菜单", systemImage: "line.3.horizontal"),
-            QuickNavMenuItemConfig(id: "vscode", title: "VS Code", systemImage: "chevron.left.forwardslash.chevron.right"),
-            QuickNavMenuItemConfig(id: "terminal", title: "Terminal", systemImage: "terminal"),
-            QuickNavMenuItemConfig(id: "projects", title: "项目", systemImage: "folder"),
-            QuickNavMenuItemConfig(id: "docs", title: "文档", systemImage: "doc.text"),
-            QuickNavMenuItemConfig(id: "figma", title: "Figma", systemImage: "square.grid.2x2"),
-            QuickNavMenuItemConfig(id: "browser", title: "浏览器", systemImage: "safari"),
-            QuickNavMenuItemConfig(id: "reload", title: "重载", systemImage: "arrow.clockwise")
-        ]
-    )
-}
-
-private struct QuickNavMenuItemConfig: Codable {
-    var id: String
-    var title: String
-    var systemImage: String
 }
 
 private extension JSONEncoder {
