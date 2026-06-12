@@ -15,6 +15,9 @@ final class RadialMenuState: ObservableObject {
     // 当前红点真正进入图标命中区的菜单项；nil 表示未选中。
     @Published var selectedItemID: String?
 
+    // 当前菜单分页。每页最多 8 个，滚轮上下切换页，不旋转圆环。
+    @Published var currentPageIndex = 0
+
     // 红点相对导航中心的视觉偏移，y 轴使用 SwiftUI 坐标系。
     @Published var cursorOffset: CGSize = .zero
 }
@@ -31,6 +34,9 @@ final class RadialWindowController {
 
     // 透明浮层窗口尺寸需要比图标布局更大一些，给圆形背景模糊扩散预留空间，避免 blur 边缘被裁切。
     private let windowSize = NSSize(width: 520, height: 520)
+
+    // 径向菜单固定为 8 个槽位；最后一页不足 8 个时只渲染实际数量。
+    private let pageSize = 8
 
     // SwiftUI 视图状态，AppKit 事件只更新这里，不直接操作视图层级。
     private let menuState = RadialMenuState()
@@ -80,6 +86,7 @@ final class RadialWindowController {
         cursorDisplayID = displayID(for: mouseLocation)
         dragStartPoint = nil
         menuState.selectedItemID = nil
+        menuState.currentPageIndex = 0
         menuState.cursorOffset = .zero
 
         let frame = frameCentered(on: mouseLocation)
@@ -133,6 +140,7 @@ final class RadialWindowController {
         originPoint = nil
         dragStartPoint = nil
         menuState.selectedItemID = nil
+        menuState.currentPageIndex = 0
         menuState.cursorOffset = .zero
 
         NSAnimationContext.runAnimationGroup { context in
@@ -214,19 +222,19 @@ final class RadialWindowController {
 
     /**
      @name startMouseTracking
-     @description 监听左键/触摸板按下、拖动、松开。普通移动不生效，避免未按住时红点漂移。
+     @description 监听左键/触摸板按下、拖动、松开，以及滚轮分页。普通移动不生效，避免未按住时红点漂移。
      */
     private func startMouseTracking() {
         stopMouseTracking()
 
-        localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] event in
+        localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp, .scrollWheel]) { [weak self] event in
             Task { @MainActor in
                 self?.handleMouseEvent(event)
             }
-            return event
+            return event.type == .scrollWheel ? nil : event
         }
 
-        globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] event in
+        globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp, .scrollWheel]) { [weak self] event in
             Task { @MainActor in
                 self?.handleMouseEvent(event)
             }
@@ -271,9 +279,34 @@ final class RadialWindowController {
                 settleSelectionIfNeeded()
                 closeNavigation(restoreCursorToOrigin: true)
             }
+        case .scrollWheel:
+            switchPage(using: event)
         default:
             break
         }
+    }
+
+    /**
+     @name switchPage
+     @description 滚轮只切换 8 项一组的菜单分页；不旋转圆环，也不触发菜单动作。
+     */
+    private func switchPage(using event: NSEvent) {
+        let deltaY = event.scrollingDeltaY
+        guard deltaY != 0 else { return }
+
+        let pageCount = max(1, Int(ceil(Double(appState.menuConfig.items.count) / Double(pageSize))))
+        guard pageCount > 1 else { return }
+
+        // AppKit 中向下滚动通常是负 delta；按需求，向下从第一页切到第二页。
+        let direction = deltaY < 0 ? 1 : -1
+        let nextPageIndex = min(max(menuState.currentPageIndex + direction, 0), pageCount - 1)
+        guard nextPageIndex != menuState.currentPageIndex else { return }
+
+        menuState.currentPageIndex = nextPageIndex
+        menuState.selectedItemID = nil
+        menuState.cursorOffset = .zero
+        dragStartPoint = nil
+        hideCursorIfNeeded()
     }
 
     /**
@@ -314,9 +347,10 @@ final class RadialWindowController {
      @description 用红点和图标中心距离做真实命中，只有进入图标区域才选中，避免按角度提前高亮。
      */
     private func selectedItemID(cursorOffset: CGSize) -> String? {
-        RadialMenuGeometry.selectedItemID(
+        RadialMenuGeometry.selectedItemIDInFixedSlots(
             cursorOffset: RadialPoint(x: Double(cursorOffset.width), y: Double(cursorOffset.height)),
-            items: appState.menuConfig.items,
+            items: currentPageItems(),
+            slotCount: pageSize,
             radius: Double(appState.menuRadius),
             itemSize: Double(appState.itemSize),
             deadZoneRadius: Double(appState.deadZoneRadius)
@@ -341,12 +375,22 @@ final class RadialWindowController {
      @description 命中任意菜单项时统一回调上层执行动作。
      */
     private func settleSelectionIfNeeded() {
-        guard let selectedItem = appState.menuConfig.items.first(where: { $0.id == menuState.selectedItemID }) else {
+        guard let selectedItem = currentPageItems().first(where: { $0.id == menuState.selectedItemID }) else {
             return
         }
 
         logger.info("Selected item: \(selectedItem.title, privacy: .public)")
         onSelectItem(selectedItem)
+    }
+
+    private func currentPageItems() -> [NavigationItem] {
+        let startIndex = menuState.currentPageIndex * pageSize
+        guard appState.menuConfig.items.indices.contains(startIndex) else {
+            return []
+        }
+
+        let endIndex = min(startIndex + pageSize, appState.menuConfig.items.count)
+        return Array(appState.menuConfig.items[startIndex..<endIndex])
     }
 
     /**

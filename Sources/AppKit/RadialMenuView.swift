@@ -24,6 +24,22 @@ struct RadialMenuView: View {
         appState.menuConfig.items
     }
 
+    private let pageSize = 8
+
+    private var currentPageItems: [NavigationItem] {
+        let startIndex = state.currentPageIndex * pageSize
+        guard items.indices.contains(startIndex) else {
+            return []
+        }
+
+        let endIndex = min(startIndex + pageSize, items.count)
+        return Array(items[startIndex..<endIndex])
+    }
+
+    private var pageCount: Int {
+        max(1, Int(ceil(Double(items.count) / Double(pageSize))))
+    }
+
     /**
      @name visualPosition
      @description 将 Core 的 Double 坐标转换成 SwiftUI 的 CGPoint；视图不保存几何算法。
@@ -45,9 +61,17 @@ struct RadialMenuView: View {
 
             CancelZoneView(radius: appState.deadZoneRadius, palette: palette)
 
-            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+            ForEach(Array(currentPageItems.enumerated()), id: \.element.id) { index, item in
                 radialItem(item, index: index)
             }
+
+            PageIndicatorView(
+                pageCount: pageCount,
+                currentPageIndex: state.currentPageIndex,
+                palette: palette
+            )
+            .offset(y: appState.menuRadius + 86)
+            .animation(.easeOut(duration: 0.12), value: state.currentPageIndex)
 
             HiddenCursorDot(palette: palette)
                 .offset(state.cursorOffset)
@@ -62,7 +86,7 @@ struct RadialMenuView: View {
      @description 渲染单个方向项。只有红点进入图标命中区时才进入 active 状态并轻微放大。
      */
     private func radialItem(_ item: NavigationItem, index: Int) -> some View {
-        let position = Self.visualPosition(for: index, total: items.count, radius: appState.menuRadius)
+        let position = Self.visualPosition(for: index, total: pageSize, radius: appState.menuRadius)
         let isActive = item.id == state.selectedItemID
 
         return VStack(spacing: 5) {
@@ -93,7 +117,35 @@ struct RadialMenuView: View {
         .frame(width: 78, height: 82)
         .scaleEffect(isActive ? 1.12 : 1)
         .animation(.easeOut(duration: DesignTokens.Motion.selectionDuration), value: state.selectedItemID)
+        .animation(.easeOut(duration: 0.08), value: state.currentPageIndex)
         .offset(x: position.x, y: position.y)
+    }
+}
+
+private struct PageIndicatorView: View {
+    let pageCount: Int
+    let currentPageIndex: Int
+    let palette: ThemePalette
+
+    // 和 iOS 分页控制器类似：只表达当前页位置，不参与鼠标命中。
+    var body: some View {
+        if pageCount > 1 {
+            HStack(spacing: 7) {
+                ForEach(0..<pageCount, id: \.self) { index in
+                    Circle()
+                        .fill(index == currentPageIndex ? palette.accent : palette.textMuted.opacity(0.45))
+                        .frame(width: index == currentPageIndex ? 7 : 6, height: index == currentPageIndex ? 7 : 6)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(.ultraThinMaterial, in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(palette.border.opacity(0.75), lineWidth: 1)
+            )
+            .allowsHitTesting(false)
+        }
     }
 }
 

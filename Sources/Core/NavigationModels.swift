@@ -137,6 +137,8 @@ public enum DefaultNavigationCatalog {
         .init(id: "docs", title: "文档", systemImage: "doc.text", action: .openFolder("~/Documents")),
         .init(id: "figma", title: "Figma", systemImage: "square.grid.2x2", action: .openApp(bundleIdentifier: "com.figma.Desktop", fallbackPath: nil)),
         .init(id: "browser", title: "浏览器", systemImage: "safari", action: .openURL("https://www.google.com")),
+        .init(id: "downloads", title: "下载", systemImage: "arrow.down.circle", action: .openFolder("~/Downloads")),
+        .init(id: "calendar", title: "日历", systemImage: "calendar", action: .openApp(bundleIdentifier: "com.apple.iCal", fallbackPath: "/System/Applications/Calendar.app")),
         .init(id: "reload", title: "重载", systemImage: "arrow.clockwise", action: .reloadConfig)
     ]
 

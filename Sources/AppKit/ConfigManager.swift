@@ -118,6 +118,7 @@ final class ConfigManager {
         let decoder = JSONDecoder()
         var config = try decoder.decode(QuickNavUserConfig.self, from: data)
         config.theme = config.theme.migratingLegacyDefaultAccents
+        config.menu = config.menu.migratingLegacyDefaultMenuItems
         return config
     }
 
@@ -129,6 +130,21 @@ final class ConfigManager {
 
     private var defaultUserConfig: QuickNavUserConfig {
         .default
+    }
+}
+
+private extension QuickNavMenuConfig {
+    // 早期默认配置只有 8 项。只有用户配置仍完整等于旧默认目录时，才迁移到新的 10 项默认目录；
+    // 真正自定义过的菜单不自动覆盖。
+    var migratingLegacyDefaultMenuItems: QuickNavMenuConfig {
+        let legacyDefaultIDs = ["menu", "vscode", "terminal", "projects", "docs", "figma", "browser", "reload"]
+        guard items.map(\.id) == legacyDefaultIDs else {
+            return self
+        }
+
+        var migratedConfig = self
+        migratedConfig.items = DefaultNavigationCatalog.items
+        return migratedConfig
     }
 }
 
